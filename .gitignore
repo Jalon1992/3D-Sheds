@@ -1,0 +1,9 @@
+node_modules/
+data/
+uploads/*
+!uploads/.gitkeep
+public/vendor/
+demo/dist/
+.env
+*.db
+*.db-*

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Design Your Shed in 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css">
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <header class="topbar" id="topbar">
+    <div class="brand"><img id="logo" alt="" hidden><span id="company">Shed Builder</span></div>
+    <nav class="steps" id="steps"></nav>
+    <a class="phone" id="phone" hidden></a>
+  </header>
+
+  <main class="layout">
+    <section class="viewport" id="viewport">
+      <div class="vp-top-left">
+        <div class="seg" id="viewMode">
+          <button data-mode="ext" class="on">Exterior</button>
+          <button data-mode="int">Interior</button>
+        </div>
+      </div>
+      <div class="vp-top-right">
+        <button class="chip" id="btnPlan" title="Floor plan">
+          <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3zM3 12h7M14 3v7M14 14v7M10 12v9"/></svg><span>Floor plan</span></button>
+        <button class="chip" id="btnGlb" title="Download 3D model (.glb)">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></svg><span>3D model</span></button>
+      </div>
+      <div class="hint" id="hint">Tip: drag doors, windows and options to move them · click one to change it</div>
+      <div class="views" id="views">
+        <button data-v="front34" class="on" title="3D view">3D</button>
+        <button data-v="front">Front</button><button data-v="left">Left</button>
+        <button data-v="right">Right</button><button data-v="back">Back</button><button data-v="top">Top</button>
+      </div>
+      <div class="itemcard" id="itemcard" hidden></div>
+      <div class="loading" id="loading"><div class="spin"></div>Loading your shed…</div>
+    </section>
+
+    <aside class="panel">
+      <div class="panel-body" id="panel"></div>
+      <footer class="panel-foot" id="foot">
+        <div class="total"><small id="totalLabel">Your price</small><strong id="total">—</strong></div>
+        <div class="nav">
+          <button class="btn ghost" id="back">Back</button>
+          <button class="btn primary" id="next">Next</button>
+        </div>
+      </footer>
+    </aside>
+  </main>
+
+  <dialog id="planDlg" class="dlg">
+    <div class="dlg-head"><strong>Floor plan</strong>
+      <div class="dlg-actions"><button class="btn ghost sm" id="planPrint">Print / PDF</button><button class="btn ghost sm" id="planSvg">Download SVG</button><button class="x" data-close>&times;</button></div></div>
+    <div class="plan" id="planBox"></div>
+  </dialog>
+
+  <div class="toast" id="toast" hidden></div>
+  <script type="module" src="/js/configurator.js"></script>
+</body>
+</html>

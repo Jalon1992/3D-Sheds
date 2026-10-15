@@ -1,0 +1,28 @@
+# One-click deploy on Render: New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: 3d-sheds
+    runtime: node
+    plan: starter            # a persistent disk needs a paid instance
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/v1/catalog
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DB_PATH
+        value: /var/data/shedbuilder.db
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

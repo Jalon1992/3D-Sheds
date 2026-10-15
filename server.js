@@ -1,0 +1,355 @@
+// 3D Shed Builder — server entry point.
+import express from 'express';
+import multer from 'multer';
+import crypto from 'node:crypto';
+import { mkdirSync, unlinkSync } from 'node:fs';
+import { join, extname, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { db, all, get, run, getSettings, setSettings, getCatalog, JSON_COLS } from './src/db.js';
+import { seed } from './src/seed.js';
+import { requireAuth, requireSession, issueSession, clearSession, verifyPassword, hashPassword, createApiKey, readSession } from './src/auth.js';
+import { emit, deliver, formatQuote, recentLog, pushToGHL, EVENTS } from './src/integrations.js';
+import { openapi } from './src/openapi.js';
+import { priceConfig, sanitizeConfig } from './public/js/shared/pricing.js';
+import { floorPlanSVG } from './public/js/shared/floorplan.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT) || 3000;
+const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, 'uploads');
+mkdirSync(UPLOAD_DIR, { recursive: true });
+
+seed();
+
+const app = express();
+app.set('trust proxy', true);
+app.use(express.json({ limit: '2mb' }));
+
+// ---- CORS for the API (lets you embed the configurator or call the API from any site / CRM)
+app.use('/api/v1', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+const baseUrl = req => (getSettings().public_url || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
+
+// ---- Simple in-memory rate limit for public quote submissions
+const hits = new Map();
+function rateLimit(max, windowMs) {
+  return (req, res, next) => {
+    const k = req.ip + req.path, now = Date.now();
+    const arr = (hits.get(k) || []).filter(t => now - t < windowMs);
+    if (arr.length >= max) return bad(res, 'Too many requests, please try again in a minute.', 429);
+    arr.push(now); hits.set(k, arr); next();
+  };
+}
+
+// =============================================================================
+//  PUBLIC API
+// =============================================================================
+app.get('/api/v1/catalog', (req, res) => res.json(getCatalog()));
+
+app.post('/api/v1/price', (req, res) => {
+  try {
+    const cat = getCatalog();
+    const cfg = sanitizeConfig(cat, req.body);
+    const p = priceConfig(cat, cfg);
+    delete p.style; res.json({ ...p, size: { width: p.size?.width, depth: p.size?.depth } });
+  } catch (e) { bad(res, e.message); }
+});
+
+app.post('/api/v1/quotes', rateLimit(8, 60000), wrap(async (req, res) => {
+  const { config, customer = {}, source, utm } = req.body || {};
+  if (!customer.first_name || !customer.email) return bad(res, 'first_name and email are required');
+  if (!/^\S+@\S+\.\S+$/.test(customer.email)) return bad(res, 'email looks invalid');
+  const cat = getCatalog();
+  let cfg, pricing;
+  try { cfg = sanitizeConfig(cat, config); pricing = priceConfig(cat, cfg); } catch (e) { return bad(res, e.message); }
+  const { style, size } = pricing; delete pricing.style;
+  pricing.size = { width: size.width, depth: size.depth };
+  const s = v => (v == null ? null : String(v).slice(0, 500));
+  const token = crypto.randomBytes(16).toString('hex');
+  const r = run(`INSERT INTO quotes (token, first_name, last_name, email, phone, address, city, state, zip, notes, sms_consent, source, utm, config, pricing, total, style_name, size_label)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    token, s(customer.first_name), s(customer.last_name), s(customer.email)?.toLowerCase(), s(customer.phone), s(customer.address), s(customer.city),
+    s(customer.state), s(customer.zip), s(customer.notes), customer.sms_consent ? 1 : 0, s(source || req.get('referer') || 'configurator'),
+    JSON.stringify(utm || {}), JSON.stringify(cfg), JSON.stringify(pricing), pricing.total, style.name, `${size.width}' x ${size.depth}'`);
+  const id = Number(r.lastInsertRowid);
+  run('UPDATE quotes SET number = ? WHERE id = ?', 'Q-' + (10000 + id), id);
+  const q = get('SELECT * FROM quotes WHERE id = ?', id);
+  emit('quote.created', q, baseUrl(req));
+  const out = formatQuote(q, baseUrl(req));
+  delete out.links.admin; delete out.integrations;
+  res.status(201).json(out);
+}));
+
+// Customer-facing quote by secret token (reload in configurator / floor plan link in emails)
+app.get('/api/v1/shared/:token', (req, res) => {
+  const q = get('SELECT * FROM quotes WHERE token = ?', req.params.token);
+  if (!q) return bad(res, 'Not found', 404);
+  res.json({ number: q.number, first_name: q.first_name, last_name: q.last_name, config: q.config, total: q.total, created_at: q.created_at });
+});
+app.get('/q/:token/floorplan.svg', (req, res) => {
+  const q = get('SELECT * FROM quotes WHERE token = ?', req.params.token);
+  if (!q) return res.status(404).send('Not found');
+  sendPlan(res, q);
+});
+function sendPlan(res, q) {
+  try {
+    const cat = getCatalog({ includeInactive: true });
+    res.type('image/svg+xml').setHeader('Content-Disposition', `inline; filename="${q.number}-floor-plan.svg"`);
+    res.send(floorPlanSVG(cat, q.config, { customer: q, quote_number: q.number, date: new Date(q.created_at + 'Z').toLocaleDateString('en-US') }));
+  } catch (e) { res.status(500).send('Could not render floor plan: ' + e.message); }
+}
+
+app.get('/api/openapi.json', (req, res) => res.json(openapi(baseUrl(req))));
+
+// =============================================================================
+//  AUTHENTICATED API (admin session OR API key)
+// =============================================================================
+const v1 = express.Router();
+v1.use(requireAuth);
+
+// ---- Quotes
+v1.get('/quotes', (req, res) => {
+  const where = [], p = [];
+  if (req.query.status) { where.push('status = ?'); p.push(req.query.status); }
+  if (req.query.since) { where.push('created_at >= ?'); p.push(String(req.query.since).replace('T', ' ').replace('Z', '')); }
+  if (req.query.q) { where.push("(first_name || ' ' || last_name LIKE ? OR email LIKE ? OR phone LIKE ? OR number LIKE ?)"); const l = `%${req.query.q}%`; p.push(l, l, l, l); }
+  const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  const limit = Math.min(500, Number(req.query.limit) || 50), offset = Number(req.query.offset) || 0;
+  const total = get(`SELECT COUNT(*) n FROM quotes ${w}`, ...p).n;
+  const rows = all(`SELECT * FROM quotes ${w} ORDER BY id DESC LIMIT ? OFFSET ?`, ...p, limit, offset);
+  res.json({ total, data: rows.map(q => ({ ...formatQuote(q, baseUrl(req)), internal_notes: q.internal_notes, ghl_status: q.ghl_status })) });
+});
+v1.get('/quotes/:id', (req, res) => {
+  const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
+  if (!q) return bad(res, 'Not found', 404);
+  res.json({ ...formatQuote(q, baseUrl(req)), internal_notes: q.internal_notes, ghl_status: q.ghl_status, pricing_lines: q.pricing.lines });
+});
+v1.patch('/quotes/:id', (req, res) => {
+  const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
+  if (!q) return bad(res, 'Not found', 404);
+  const { status, internal_notes } = req.body || {};
+  run("UPDATE quotes SET status = COALESCE(?, status), internal_notes = COALESCE(?, internal_notes), updated_at = datetime('now') WHERE id = ?",
+    status ?? null, internal_notes ?? null, q.id);
+  const nq = get('SELECT * FROM quotes WHERE id = ?', q.id);
+  emit(status && status !== q.status ? 'quote.status_changed' : 'quote.updated', nq, baseUrl(req));
+  res.json(formatQuote(nq, baseUrl(req)));
+});
+v1.delete('/quotes/:id', (req, res) => { run('DELETE FROM quotes WHERE id = ?', Number(req.params.id)); res.sendStatus(204); });
+v1.get('/quotes/:id/floorplan.svg', (req, res) => {
+  const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
+  if (!q) return res.status(404).send('Not found');
+  sendPlan(res, q);
+});
+v1.post('/quotes/:id/resend', (req, res) => {
+  const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
+  if (!q) return bad(res, 'Not found', 404);
+  emit('quote.created', q, baseUrl(req));
+  res.status(202).json({ queued: true });
+});
+
+// ---- Generic CRUD for catalog + webhooks
+const TABLES = {
+  styles: ['name', 'description', 'image_url', 'roof_type', 'ridge_axis', 'wall_height', 'roof_pitch', 'overhang', 'gable_overhang', 'siding_type', 'roof_material', 'roof_choices', 'standard_options', 'default_colors', 'active', 'sort'],
+  sizes: ['style_id', 'width', 'depth', 'price', 'active', 'sort'],
+  colors: ['name', 'hex', 'category', 'material', 'price', 'active', 'sort'],
+  options: ['name', 'description', 'category', 'kind', 'placement', 'swap_group', 'width', 'height', 'depth', 'elevation', 'price', 'price_unit', 'model_url', 'image_url', 'plan_label', 'max_qty', 'active', 'sort'],
+  webhooks: ['name', 'url', 'events', 'secret', 'headers', 'active'],
+};
+function clean(table, body) {
+  const out = {};
+  for (const k of TABLES[table]) if (body && k in body) {
+    let v = body[k];
+    if (JSON_COLS.has(k) && typeof v !== 'string') v = JSON.stringify(v ?? (k === 'headers' || k === 'default_colors' ? {} : []));
+    if (k === 'gable_overhang' && (v === '' || v === undefined)) v = null;
+    if (typeof v === 'boolean') v = v ? 1 : 0;
+    if (v === '') v = null;
+    out[k] = v;
+  }
+  return out;
+}
+for (const table of Object.keys(TABLES)) {
+  v1.get(`/${table}`, (req, res) => {
+    const filt = table === 'sizes' && req.query.style_id ? ' WHERE style_id = ' + Number(req.query.style_id) : '';
+    const order = table === 'webhooks' ? 'id' : (table === 'sizes' ? 'style_id, sort, width, depth' : 'sort, id');
+    res.json(all(`SELECT * FROM ${table}${filt} ORDER BY ${order}`));
+  });
+  v1.get(`/${table}/:id`, (req, res) => {
+    const r = get(`SELECT * FROM ${table} WHERE id = ?`, Number(req.params.id));
+    r ? res.json(r) : bad(res, 'Not found', 404);
+  });
+  v1.post(`/${table}`, (req, res) => {
+    const d = clean(table, req.body);
+    if (table === 'webhooks' && !/^https?:\/\//.test(d.url || '')) return bad(res, 'url must start with http(s)://');
+    const keys = Object.keys(d);
+    if (!keys.length) return bad(res, 'No valid fields');
+    try {
+      const r = run(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, ...keys.map(k => d[k]));
+      res.status(201).json(get(`SELECT * FROM ${table} WHERE id = ?`, Number(r.lastInsertRowid)));
+    } catch (e) { bad(res, e.message); }
+  });
+  const upd = (req, res) => {
+    const d = clean(table, req.body), keys = Object.keys(d);
+    if (!keys.length) return bad(res, 'No valid fields');
+    try {
+      run(`UPDATE ${table} SET ${keys.map(k => k + ' = ?').join(', ')} WHERE id = ?`, ...keys.map(k => d[k]), Number(req.params.id));
+      res.json(get(`SELECT * FROM ${table} WHERE id = ?`, Number(req.params.id)));
+    } catch (e) { bad(res, e.message); }
+  };
+  v1.patch(`/${table}/:id`, upd);
+  v1.put(`/${table}/:id`, upd);
+  v1.delete(`/${table}/:id`, (req, res) => { run(`DELETE FROM ${table} WHERE id = ?`, Number(req.params.id)); res.sendStatus(204); });
+}
+v1.post('/webhooks/:id/test', wrap(async (req, res) => {
+  const h = get('SELECT * FROM webhooks WHERE id = ?', Number(req.params.id));
+  if (!h) return bad(res, 'Not found', 404);
+  const q = get('SELECT * FROM quotes ORDER BY id DESC LIMIT 1');
+  const data = q ? formatQuote(q, baseUrl(req)) : { note: 'No quotes yet — this is a test delivery.' };
+  const r = await deliver({ ...h, url: h.url }, 'test', data);
+  res.json({ status: r.status, ok: r.ok, response: (r.text || '').slice(0, 500) });
+}));
+app.use('/api/v1', v1);
+
+// =============================================================================
+//  ADMIN-ONLY (session)
+// =============================================================================
+app.post('/api/auth/login', rateLimit(10, 60000), (req, res) => {
+  const { email, password } = req.body || {};
+  const u = get('SELECT * FROM users WHERE email = ?', String(email || '').toLowerCase().trim());
+  if (!u || !verifyPassword(String(password || ''), u.password_hash)) return bad(res, 'Wrong email or password', 401);
+  issueSession(res, u.id);
+  res.json({ id: u.id, email: u.email, name: u.name });
+});
+app.post('/api/auth/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
+app.get('/api/auth/me', (req, res) => { const u = readSession(req); u ? res.json(u) : bad(res, 'Not logged in', 401); });
+
+const admin = express.Router();
+admin.use(requireSession);
+admin.post('/account', (req, res) => {
+  const { email, name, current_password, new_password } = req.body || {};
+  const u = get('SELECT * FROM users WHERE id = ?', req.user.id);
+  if (!verifyPassword(String(current_password || ''), u.password_hash)) return bad(res, 'Current password is wrong');
+  if (new_password && String(new_password).length < 8) return bad(res, 'New password must be at least 8 characters');
+  run('UPDATE users SET email = COALESCE(?, email), name = COALESCE(?, name), password_hash = ? WHERE id = ?',
+    email ? String(email).toLowerCase() : null, name || null, new_password ? hashPassword(String(new_password)) : u.password_hash, u.id);
+  res.json({ ok: true });
+});
+admin.get('/users', (req, res) => res.json(all('SELECT id, email, name, created_at FROM users')));
+admin.post('/users', (req, res) => {
+  const { email, name, password } = req.body || {};
+  if (!email || !password || password.length < 8) return bad(res, 'Email and an 8+ character password are required');
+  try { run('INSERT INTO users (email, name, password_hash) VALUES (?,?,?)', email.toLowerCase(), name || '', hashPassword(password)); res.json({ ok: true }); }
+  catch { bad(res, 'That email already exists'); }
+});
+admin.delete('/users/:id', (req, res) => {
+  if (Number(req.params.id) === req.user.id) return bad(res, "You can't delete yourself");
+  run('DELETE FROM users WHERE id = ?', Number(req.params.id)); res.sendStatus(204);
+});
+admin.get('/settings', (req, res) => {
+  const s = getSettings(); delete s._session_secret;
+  if (s.ghl_token) s.ghl_token_set = true;
+  s.ghl_token = s.ghl_token ? '••••••••' + String(s.ghl_token).slice(-4) : '';
+  res.json(s);
+});
+admin.put('/settings', (req, res) => {
+  const b = { ...(req.body || {}) };
+  delete b._session_secret; delete b.ghl_token_set;
+  if (typeof b.ghl_token === 'string' && b.ghl_token.startsWith('••••')) delete b.ghl_token; // unchanged
+  for (const k of ['tax_rate', 'delivery_fee']) if (k in b) b[k] = Number(b[k]) || 0;
+  setSettings(b); res.json({ ok: true });
+});
+admin.post('/ghl/test', wrap(async (req, res) => {
+  const q = get('SELECT * FROM quotes ORDER BY id DESC LIMIT 1');
+  if (!q) return bad(res, 'Submit at least one quote first (use the configurator), then test.');
+  try { const r = await pushToGHL(q, formatQuote(q, baseUrl(req))); res.json({ ok: true, ...r }); }
+  catch (e) { bad(res, e.message); }
+}));
+admin.get('/catalog', (req, res) => res.json(getCatalog({ includeInactive: true })));
+admin.get('/api-keys', (req, res) => res.json(all('SELECT id, name, prefix, last_used, created_at FROM api_keys ORDER BY id DESC')));
+admin.post('/api-keys', (req, res) => res.json(createApiKey(req.body?.name)));
+admin.delete('/api-keys/:id', (req, res) => { run('DELETE FROM api_keys WHERE id = ?', Number(req.params.id)); res.sendStatus(204); });
+admin.get('/webhook-log', (req, res) => res.json(recentLog(150)));
+admin.get('/events', (req, res) => res.json(EVENTS));
+admin.get('/stats', (req, res) => {
+  res.json({
+    total: get('SELECT COUNT(*) n FROM quotes').n,
+    last30: get("SELECT COUNT(*) n FROM quotes WHERE created_at >= datetime('now','-30 days')").n,
+    value30: get("SELECT COALESCE(SUM(total),0) v FROM quotes WHERE created_at >= datetime('now','-30 days')").v,
+    byStatus: all('SELECT status, COUNT(*) n FROM quotes GROUP BY status'),
+    byStyle: all('SELECT style_name, COUNT(*) n, ROUND(AVG(total)) avg FROM quotes GROUP BY style_name ORDER BY n DESC'),
+    daily: all("SELECT date(created_at) d, COUNT(*) n FROM quotes WHERE created_at >= datetime('now','-30 days') GROUP BY d ORDER BY d"),
+  });
+});
+admin.post('/duplicate/:table/:id', (req, res) => {
+  const t = req.params.table;
+  if (!['styles', 'options', 'colors'].includes(t)) return bad(res, 'Cannot duplicate that');
+  const row = db.prepare(`SELECT * FROM ${t} WHERE id = ?`).get(Number(req.params.id));
+  if (!row) return bad(res, 'Not found', 404);
+  delete row.id; row.name = row.name + ' (copy)';
+  const keys = Object.keys(row);
+  const id = Number(run(`INSERT INTO ${t} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, ...keys.map(k => row[k])).lastInsertRowid);
+  if (t === 'styles') for (const z of db.prepare('SELECT * FROM sizes WHERE style_id = ?').all(Number(req.params.id)))
+    run('INSERT INTO sizes (style_id, width, depth, price, active, sort) VALUES (?,?,?,?,?,?)', id, z.width, z.depth, z.price, z.active, z.sort);
+  res.json({ id });
+});
+admin.put('/styles/:id/sizes', (req, res) => {
+  // Replace the full size list of a style in one go (used by the admin size grid)
+  const sid = Number(req.params.id);
+  const keep = [];
+  for (const [i, z] of (req.body || []).entries()) {
+    const w = Number(z.width), d = Number(z.depth);
+    if (!w || !d) continue;
+    if (z.id) { run('UPDATE sizes SET width=?, depth=?, price=?, active=?, sort=? WHERE id=? AND style_id=?', w, d, Number(z.price) || 0, z.active ? 1 : 0, i, Number(z.id), sid); keep.push(Number(z.id)); }
+    else keep.push(Number(run('INSERT INTO sizes (style_id, width, depth, price, active, sort) VALUES (?,?,?,?,?,?)', sid, w, d, Number(z.price) || 0, z.active === false ? 0 : 1, i).lastInsertRowid));
+  }
+  run(`DELETE FROM sizes WHERE style_id = ? ${keep.length ? `AND id NOT IN (${keep.join(',')})` : ''}`, sid);
+  res.json(all('SELECT * FROM sizes WHERE style_id = ? ORDER BY sort', sid));
+});
+
+// ---- File uploads (3D models + images)
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (req, file, cb) => cb(null, Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex') + extname(file.originalname).toLowerCase()),
+  }),
+  limits: { fileSize: 40 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, /\.(glb|gltf|png|jpe?g|webp|svg)$/i.test(file.originalname)),
+});
+admin.post('/upload', upload.single('file'), (req, res) => {
+  if (!req.file) return bad(res, 'Upload a .glb model or an image (png/jpg/webp/svg)');
+  res.json({ url: '/uploads/' + req.file.filename, name: req.file.originalname, size: req.file.size });
+});
+admin.delete('/upload', (req, res) => {
+  const f = String(req.query.url || '').replace(/^\/uploads\//, '');
+  if (!f || f.includes('/') || f.includes('..')) return bad(res, 'Bad path');
+  try { unlinkSync(join(UPLOAD_DIR, f)); } catch { /* ignore */ }
+  res.sendStatus(204);
+});
+app.use('/api/admin', admin);
+
+// =============================================================================
+//  STATIC
+// =============================================================================
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+app.get('/docs', (req, res) => res.sendFile(join(__dirname, 'public', 'docs.html')));
+app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }));
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: err.message || 'Server error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`\n  3D Shed Builder running on http://localhost:${PORT}`);
+  console.log(`  Configurator:  http://localhost:${PORT}/`);
+  console.log(`  Admin:         http://localhost:${PORT}/admin/`);
+  console.log(`  API docs:      http://localhost:${PORT}/docs\n`);
+});

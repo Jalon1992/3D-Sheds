@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Shed Builder Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/three.module.js", "three/addons/": "/vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="login" class="login" hidden>
+    <form id="loginForm" class="login-card">
+      <div class="logo-mark"><svg viewBox="0 0 32 32"><path d="M4 15 16 5l12 10M7 13v14h18V13"/><rect x="13" y="18" width="6" height="9"/></svg></div>
+      <h1>Shed Builder Admin</h1>
+      <label>Email<input name="email" type="email" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="err" id="loginErr" hidden></div>
+      <button class="btn primary block">Log in</button>
+    </form>
+  </div>
+
+  <div id="app" class="app" hidden>
+    <aside class="side">
+      <div class="side-brand"><div class="logo-mark sm"><svg viewBox="0 0 32 32"><path d="M4 15 16 5l12 10M7 13v14h18V13"/><rect x="13" y="18" width="6" height="9"/></svg></div><span id="sideName">Shed Builder</span></div>
+      <nav id="nav">
+        <a href="#/dashboard" data-r="dashboard"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/></svg>Dashboard</a>
+        <a href="#/quotes" data-r="quotes"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Quotes</a>
+        <div class="nav-h">Catalog</div>
+        <a href="#/styles" data-r="styles"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7M5 10v10h14V10"/></svg>Styles &amp; sizes</a>
+        <a href="#/colors" data-r="colors"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.5"/><circle cx="12" cy="7.5" r="1.5"/><circle cx="16" cy="10" r="1.5"/></svg>Roofing &amp; colors</a>
+        <a href="#/options" data-r="options"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/><circle cx="15" cy="12" r="1"/></svg>Options &amp; 3D models</a>
+        <div class="nav-h">Connect</div>
+        <a href="#/integrations" data-r="integrations"><svg viewBox="0 0 24 24"><path d="M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8"/></svg>Integrations &amp; API</a>
+        <div class="nav-h">Setup</div>
+        <a href="#/settings" data-r="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</a>
+        <a href="#/account" data-r="account"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Account &amp; users</a>
+      </nav>
+      <div class="side-foot">
+        <a href="/" target="_blank" class="btn ghost sm block">Open configurator ↗</a>
+        <button class="btn link sm" id="logout">Log out</button>
+      </div>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+
+  <dialog id="modal" class="modal"><div id="modalBody"></div></dialog>
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="/admin/admin.js"></script>
+</body>
+</html>
