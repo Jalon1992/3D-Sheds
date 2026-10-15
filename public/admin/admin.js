@@ -402,7 +402,7 @@ async function colors() {
   const cg = settings.color_groups || {};
   const R = roofing();
   const unitTxt = { per_roof_sqft: '/ sq ft of roof', per_sqft: '/ sq ft of floor', each: 'flat' };
-  $('#main').innerHTML = head('Roofing & colors', 'Tip: name a door or window color “Match Trim” and it automatically follows the trim color. Untick “Customers can choose” to hide a color group from customers.', `<button class="btn primary" id="addColor">+ New color</button>`) + `
+  $('#main').innerHTML = head('Roofing & colors', 'Tip: name a door or window color “Match Trim” and it automatically follows the trim color. Window colors set the window frame and grids; the trim around windows always matches the trim color. Untick “Customers can choose” to hide a color group from customers.', `<button class="btn primary" id="addColor">+ New color</button>`) + `
     <div class="card" style="margin-bottom:16px"><div class="card-pad" style="padding-bottom:4px"><h2>Roofing materials</h2><p class="muted" style="margin:0">Customers pick these on the “Roof &amp; Colors” step. Each style's <b>standard roofing</b> is included; others charge the difference. Which ones each style offers is set in Styles &amp; sizes.</p></div>
     <table class="tbl"><tr><th>Key</th><th>Name shown to customers</th><th>Description</th><th class="num">Price</th><th>Priced</th><th>Active</th></tr>
     ${R.map((r, i) => `<tr><td class="mono">${esc(r.key)}</td><td><input class="in" data-rf="${i}" data-k="name" value="${esc(r.name)}"></td><td><input class="in" data-rf="${i}" data-k="description" value="${esc(r.description || '')}"></td>

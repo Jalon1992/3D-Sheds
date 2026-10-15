@@ -50,7 +50,7 @@ export function seed() {
     ['roof', 'Galvalume', '#b9bec0', 0, 'metal'], ['roof', 'Black', '#1f2022', 0, 'metal'], ['roof', 'Charcoal Gray', '#45484b', 0, 'metal'],
     ['roof', 'Burnished Slate', '#4a3f35', 0, 'metal'], ['roof', 'Barn Red', '#7a2620', 0, 'metal'], ['roof', 'Forest Green', '#2f4a36', 0, 'metal'],
     ['roof', 'Ocean Blue', '#2c4a63', 0, 'metal'], ['roof', 'Polar White', '#eceeea', 0, 'metal'],
-    ['window', 'Match Trim', '#f4f4ef'], ['window', 'White', '#f6f6f2'], ['window', 'Black', '#1e1f20'],
+    ['window', 'White', '#f6f6f2'], ['window', 'Match Trim', '#f4f4ef'], ['window', 'Black', '#1e1f20'],
     ['window', 'Bronze', '#4a3b2c'], ['window', 'Almond', '#d9cdb4'],
     ['door', 'Match Trim', '#f4f4ef'], ['door', 'Black', '#1e1f20'], ['door', 'Barn Red', '#8c2d22'], ['door', 'Natural Wood', '#9a6a40', 95],
   ];

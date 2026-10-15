@@ -244,15 +244,23 @@ function handle(g, x, y, z, M) {
   const k = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), M.steel); k.position.set(x, y, z); g.add(k);
   box(0.1, 0.3, 0.04, M.steel, x, y, z - 0.05, g);
 }
-function windowUnit(g, w, h, M0, opts = {}) {
-  const M = { ...M0, trim: M0.window || M0.trim }; // window frame, grids and casing use the window color
+function windowUnit(g, w, h, M, opts = {}) {
+  // Exterior casing, sill and interior casing use the TRIM color (matches the rest of the trim);
+  // the window itself (sash frame + grids) uses the WINDOW color.
+  const MW = M.window || M.trim;
   const zOut = T / 2;
   casing(g, w, h, M, zOut, true);
-  box(w, h, 0.03, M.glass, 0, h / 2, 0.02, g);
+  box(w, h, 0.03, M.glass, 0, h / 2, 0.0, g);
+  const fw = Math.min(0.14, w * 0.08), fd = 0.14; // sash frame width/depth
+  box(w, fw, fd, MW, 0, h - fw / 2, 0.0, g);
+  box(w, fw, fd, MW, 0, fw / 2, 0.0, g);
+  box(fw, h, fd, MW, -w / 2 + fw / 2, h / 2, 0.0, g);
+  box(fw, h, fd, MW, w / 2 - fw / 2, h / 2, 0.0, g);
   const cols = opts.cols ?? 2, rows = opts.rows ?? 2;
-  for (let i = 1; i < cols; i++) box(0.06, h, 0.06, M.trim, -w / 2 + w * i / cols, h / 2, 0.05, g);
-  for (let i = 1; i < rows; i++) box(w, 0.06, 0.06, M.trim, 0, h * i / rows, 0.05, g);
-  // interior casing
+  const iw = w - 2 * fw, ih = h - 2 * fw;
+  for (let i = 1; i < cols; i++) box(0.05, ih, 0.08, MW, -iw / 2 + iw * i / cols, h / 2, 0.02, g);
+  for (let i = 1; i < rows; i++) box(iw, 0.05, 0.08, MW, 0, fw + ih * i / rows, 0.02, g);
+  // interior casing (trim color)
   box(w + 0.3, 0.15, 0.04, M.trim, 0, h + 0.07, -T / 2 - 0.02, g);
   box(w + 0.3, 0.15, 0.2, M.trim, 0, -0.07, -T / 2 - 0.05, g);
 }

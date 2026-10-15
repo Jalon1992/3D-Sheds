@@ -82,7 +82,7 @@ Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side
 Admin → **Roofing & colors → Roofing materials**: rename, describe and price each roofing type: per sq ft of **roof surface** (calculated from pitch and overhangs), per sq ft of floor, or flat. On each style choose the **standard roofing** (included in the base price) and which roofing types customers can pick; picking a different one charges the difference. Each roof color can be limited to shingles or metal (e.g. Galvalume only shows for Ag Panel).
 
 ### Colors
-Siding, trim, roof, door and **window** colors, each with an optional upcharge. A door or window color named **“Match Trim”** automatically follows the trim color. Each color group has a **“Customers can choose”** switch; turn it off and customers no longer see that choice (the style's default color is used, and the server enforces it).
+Siding, trim, roof, door and **window** colors (window color = the window frame and grids; the trim around windows always matches the trim color), each with an optional upcharge. A door or window color named **“Match Trim”** automatically follows the trim color. Each color group has a **“Customers can choose”** switch; turn it off and customers no longer see that choice (the style's default color is used, and the server enforces it).
 
 ### Options & 3D models
 Every option has a category, price, size and a **placement**:
