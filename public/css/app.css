@@ -13,12 +13,15 @@
   --panel-w: 420px;
   --top-h: 64px;
 }
+:root { color-scheme: light; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
 button { font: inherit; color: inherit; cursor: pointer; }
-input, select, textarea { font: inherit; color: inherit; }
+input, select, textarea { font: inherit; color: var(--ink); background-color: #fff; }
+input::placeholder, textarea::placeholder { color: #9aa4a1; }
+dialog { color: var(--ink); background: #fff; }
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
 /* ---------- Top bar ---------- */

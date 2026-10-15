@@ -3,11 +3,17 @@
   --line: #e4e8e6; --bg: #f5f7f6; --card: #fff; --danger: #b42318; --warn: #b54708; --ok: #067647;
   --shadow: 0 1px 2px rgba(16,24,22,.05), 0 4px 14px rgba(16,24,22,.06);
 }
+/* This UI is designed light-only: pin the color scheme so dark-mode browsers/viewers
+   don't swap in dark dialog backgrounds or white form text. */
+:root { color-scheme: light; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; }
 body { font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
+input, select, textarea { color: var(--ink); background-color: #fff; }
+input::placeholder, textarea::placeholder { color: #9aa4a1; }
+dialog { color: var(--ink); background: #fff; }
 button { cursor: pointer; }
 a { color: var(--brand); }
 svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
@@ -110,7 +116,7 @@ table.tbl { width: 100%; border-collapse: collapse; }
 .upl .fn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-size: 13px; border: 1px dashed #cdd5d2; border-radius: 8px; padding: 8px 10px; }
 
 /* modal */
-.modal { border: 0; padding: 0; border-radius: 16px; width: min(1100px, 96vw); max-height: 94vh; box-shadow: 0 30px 90px rgba(0,0,0,.3); overflow: hidden; }
+.modal { border: 0; padding: 0; border-radius: 16px; background: #fff; color: var(--ink); width: min(1100px, 96vw); max-height: 94vh; box-shadow: 0 30px 90px rgba(0,0,0,.3); overflow: hidden; }
 .modal.narrow { width: min(620px, 96vw); }
 .modal::backdrop { background: rgba(16,24,22,.45); }
 .m-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid var(--line); }
