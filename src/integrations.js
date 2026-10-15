@@ -1,57 +1,11 @@
 // Outbound integrations: generic signed webhooks + native GoHighLevel (LeadConnector API v2).
 import crypto from 'node:crypto';
 import { all, get, run, getSettings } from './db.js';
+import { formatQuote } from '../public/js/shared/quote-format.js';
 
 export const EVENTS = ['quote.created', 'quote.updated', 'quote.status_changed', 'test'];
 
-/** Public, integration-friendly representation of a quote (also used as the API response). */
-export function formatQuote(q, baseUrl) {
-  const p = q.pricing || {};
-  const lines = p.lines || [];
-  const colors = lines.filter(l => l.type === 'color').reduce((a, l) => (a[l.category] = l.label.split(': ')[1], a), {});
-  const options = lines.filter(l => l.type === 'option').map(l => ({
-    name: l.label, category: l.category, wall: l.wall, price: l.amount, note: l.note || undefined,
-  }));
-  const roofLine = lines.find(l => l.type === 'roof');
-  const roofing = roofLine ? roofLine.label.replace(/^Roofing:\s*/, '') : undefined;
-  const base = (baseUrl || '').replace(/\/$/, '');
-  const summary = [
-    `${q.style_name} ${q.size_label}`,
-    roofing ? `Roof: ${roofing}` : '',
-    Object.entries(colors).map(([k, v]) => `${k}: ${v}`).join(', '),
-    options.length ? 'Options: ' + options.map(o => o.name).join(', ') : '',
-    `Total: $${Number(q.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-  ].filter(Boolean).join(' | ');
-  return {
-    id: q.id,
-    number: q.number,
-    status: q.status,
-    created_at: q.created_at,
-    updated_at: q.updated_at,
-    customer: {
-      first_name: q.first_name, last_name: q.last_name, full_name: [q.first_name, q.last_name].filter(Boolean).join(' '),
-      email: q.email, phone: q.phone, address: q.address, city: q.city, state: q.state, zip: q.zip,
-      notes: q.notes, sms_consent: !!q.sms_consent,
-    },
-    shed: {
-      style: q.style_name, size: q.size_label,
-      width_ft: p.size?.width, depth_ft: p.size?.depth, sq_ft: p.size ? p.size.width * p.size.depth : undefined,
-      roofing, colors,
-    },
-    options,
-    pricing: { subtotal: p.subtotal, delivery: p.delivery, tax: p.tax, tax_rate: p.tax_rate, total: p.total },
-    summary,
-    links: {
-      view_3d: `${base}/?q=${q.token}`,
-      download_3d_model: `${base}/?q=${q.token}&download=glb`,
-      floor_plan_svg: `${base}/q/${q.token}/floorplan.svg`,
-      admin: `${base}/admin/#/quotes/${q.id}`,
-    },
-    source: q.source, utm: q.utm || undefined,
-    integrations: { ghl_contact_id: q.ghl_contact_id, ghl_opportunity_id: q.ghl_opportunity_id },
-    config: q.config,
-  };
-}
+export { formatQuote };
 
 function log(webhook_id, target, event, status, ok, attempt, response) {
   run('INSERT INTO webhook_log (webhook_id, target, event, status, ok, attempt, response) VALUES (?,?,?,?,?,?,?)',

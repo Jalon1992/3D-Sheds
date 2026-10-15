@@ -22,7 +22,7 @@ export function floorPlanSVG(catalog, config, meta = {}) {
   const W = size.width, D = size.depth;
   const S = 40;                         // px per foot
   const groundExtra = Math.max(0, ...(config.items || []).map(it => optById[it.option_id]).filter(o => o && o.placement === 'ground').map(o => (o.depth || 3) * S));
-  const margin = 110 + groundExtra, titleH = 120;
+  const margin = 210 + groundExtra, titleH = 120;
   const vbW = W * S + margin * 2, vbH = D * S + margin * 2 + titleH;
   const ox = margin + (W * S) / 2, oz = margin + (D * S) / 2;  // world (0,0) in svg
   const X = x => ox + x * S, Z = z => oz + z * S;
@@ -91,8 +91,10 @@ export function floorPlanSVG(catalog, config, meta = {}) {
       }
       out.push(`</g>`);
       // label outside
-      const lp = { x: X(p.x) + p.nx * 34, z: Z(p.z) + p.nz * 30 };
-      out.push(`<text x="${lp.x}" y="${lp.z + 4}" font-size="12" text-anchor="middle" fill="#3b4744">${esc(shortName(o))}</text>`);
+      // label just outside the wall; side-wall labels are anchored away from the wall so they never overlap it
+      const lp = { x: X(p.x) + p.nx * 22, z: Z(p.z) + p.nz * 30 };
+      const anchor = p.nx < 0 ? 'end' : p.nx > 0 ? 'start' : 'middle';
+      out.push(`<text x="${lp.x}" y="${lp.z + 4}" font-size="12" text-anchor="${anchor}" fill="#3b4744">${esc(shortName(o))}</text>`);
       continue;
     }
     if (o.placement === 'wall_interior' || o.placement === 'floor') {
@@ -136,14 +138,14 @@ export function floorPlanSVG(catalog, config, meta = {}) {
   }
 
   // Dimensions
-  const dimY = Z(D / 2) + 70 + groundExtra, dimX = X(-W / 2) - 70 - groundExtra * 0;
+  const dimY = Z(D / 2) + 84 + groundExtra, dimX = X(-W / 2) - 190;
   out.push(dimLine(X(-W / 2), dimY, X(W / 2), dimY, fmtFt(W), false));
   out.push(dimLine(dimX, Z(-D / 2), dimX, Z(D / 2), fmtFt(D), true));
   // Wall labels
-  out.push(`<text x="${X(0)}" y="${Z(D / 2) + 46 + groundExtra}" font-size="13" font-weight="bold" text-anchor="middle" fill="${accent}" letter-spacing="2">FRONT</text>`);
-  out.push(`<text x="${X(0)}" y="${Z(-D / 2) - 40}" font-size="13" font-weight="bold" text-anchor="middle" fill="#7d8885" letter-spacing="2">BACK</text>`);
-  out.push(`<text x="${X(W / 2) + 48}" y="${Z(0)}" font-size="13" font-weight="bold" text-anchor="middle" fill="#7d8885" letter-spacing="2" transform="rotate(90 ${X(W / 2) + 48} ${Z(0)})">RIGHT</text>`);
-  out.push(`<text x="${X(-W / 2) - 36}" y="${Z(0)}" font-size="13" font-weight="bold" text-anchor="middle" fill="#7d8885" letter-spacing="2" transform="rotate(-90 ${X(-W / 2) - 36} ${Z(0)})">LEFT</text>`);
+  out.push(`<text x="${X(0)}" y="${Z(D / 2) + 56 + groundExtra}" font-size="13" font-weight="bold" text-anchor="middle" fill="${accent}" letter-spacing="2">FRONT</text>`);
+  out.push(`<text x="${X(0)}" y="${Z(-D / 2) - 52}" font-size="13" font-weight="bold" text-anchor="middle" fill="#7d8885" letter-spacing="2">BACK</text>`);
+  out.push(`<text x="${X(W / 2) + 175}" y="${Z(0)}" font-size="13" font-weight="bold" text-anchor="middle" fill="#7d8885" letter-spacing="2" transform="rotate(90 ${X(W / 2) + 175} ${Z(0)})">RIGHT</text>`);
+  out.push(`<text x="${X(-W / 2) - 160}" y="${Z(0)}" font-size="13" font-weight="bold" text-anchor="middle" fill="#7d8885" letter-spacing="2" transform="rotate(-90 ${X(-W / 2) - 160} ${Z(0)})">LEFT</text>`);
 
   // Title block
   const ty = vbH - titleH + 10;

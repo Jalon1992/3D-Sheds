@@ -478,7 +478,8 @@ async function submitQuote() {
     const r = await fetch('/api/v1/quotes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: state.config, customer: data, utm, source: params.get('source') || document.referrer || 'configurator' }) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Something went wrong');
-    j.token = new URL(j.links.view_3d).searchParams.get('q');
+    const u = new URL(j.links.view_3d, location.href);
+    j.token = u.searchParams.get('q') || (u.hash.match(/^#q-([a-f0-9]+)/) || [])[1];
     state.submitted = j;
     try { window.parent !== window && window.parent.postMessage({ type: 'shedbuilder:quote', quote: j }, '*'); } catch { /* ignore */ }
     history.replaceState(null, '', `?q=${j.token}`);
@@ -546,7 +547,9 @@ async function boot() {
     onDrag: dragItem,
     onDragEnd: uid => { $('#viewport').classList.remove('dragging'); selectItem(uid); renderPanelIfOptions(); },
   });
-  const token = params.get('q');
+  const hq = location.hash.match(/^#q-([a-f0-9]+)(?:\.(glb|plan))?$/);
+  const token = params.get('q') || hq?.[1];
+  const dlWant = params.get('download') || hq?.[2];
   if (token) {
     try {
       const q = await (await fetch('/api/v1/shared/' + encodeURIComponent(token))).json();
@@ -571,7 +574,7 @@ async function boot() {
   renderSteps(); renderPanel();
   setTimeout(() => $('#loading').classList.add('gone'), 150);
   setTimeout(() => $('#hint').classList.add('gone'), 9000);
-  if (params.get('download') === 'glb') setTimeout(downloadGLB, 1200);
-  if (params.get('download') === 'plan') setTimeout(openPlan, 600);
+  if (dlWant === 'glb') setTimeout(downloadGLB, 1200);
+  if (dlWant === 'plan') setTimeout(openPlan, 600);
 }
 boot().catch(e => { console.error(e); $('#panel').innerHTML = `<h2>Something went wrong</h2><p class="sub">${esc(e.message)}</p>`; });

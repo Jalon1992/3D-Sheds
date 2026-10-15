@@ -207,7 +207,7 @@ Prices are always recalculated on the server, so a tampered browser can't submit
 
 ## Try-it-now demo
 
-`npm run build:demo` builds `demo/dist/shed-builder-demo.html`: the customer builder as a single file with the sample catalog and no server (quotes aren't sent anywhere). Handy for showing people before you deploy.
+`npm run build:demo` builds a static demo in `demo/dist/`: the 3D builder (`shed-builder-demo.html`) and the admin (`admin.html`). They share an in-browser stand-in for the server, so admin changes show up in the builder and submitted quotes appear in the admin. Data stays in that browser; webhooks and GoHighLevel only run on the real server. Serve both files from the same folder (with the builder as `index.html`). `node demo/build.mjs --seed http://localhost:3000` refreshes the sample catalog from a running server.
 
 ## Project layout
 

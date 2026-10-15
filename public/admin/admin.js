@@ -1,6 +1,6 @@
 // Admin dashboard (vanilla JS SPA).
-import { ShedScene, BUILTIN_KINDS } from '/js/shed3d.js';
-import { defaultConfig, money, WALLS, DEFAULT_ROOFING } from '/js/shared/pricing.js';
+import { ShedScene, BUILTIN_KINDS } from '../js/shed3d.js';
+import { defaultConfig, money, WALLS, DEFAULT_ROOFING } from '../js/shared/pricing.js';
 const roofing = () => (Array.isArray(settings.roofing) && settings.roofing.length ? settings.roofing : DEFAULT_ROOFING);
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -21,6 +21,12 @@ const PLACEMENTS = [
 ];
 const PRICE_UNITS = [['each', 'Each'], ['per_ft_wall', 'Per ft of the wall it is on'], ['per_ft_width', 'Per ft of shed width'], ['per_ft_depth', 'Per ft of shed depth'], ['per_sqft', 'Per sq ft of floor'], ['per_ft_perimeter', 'Per ft of perimeter']];
 const STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'];
+const CONFIG_URL = window.__configuratorUrl || '/';
+const planUrl = id => (window.__planUrl ? window.__planUrl(id) : `/api/v1/quotes/${id}/floorplan.svg`);
+function saveFile(blob, name) {
+  if (window.__shedSave) return window.__shedSave(blob, name);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+}
 
 // ---------------------------------------------------------------------------
 // API + UI helpers
@@ -134,7 +140,10 @@ async function start() {
   if (settings.brand_color) document.documentElement.style.setProperty('--brand', settings.brand_color);
   window.onhashchange = route; route();
 }
-(async () => { try { me = await api('GET', '/api/auth/me'); start(); } catch { showLogin(); } })();
+(async () => {
+  const cfg = document.querySelector('.side-foot a.btn'); if (cfg) cfg.href = CONFIG_URL;
+  try { me = await api('GET', '/api/auth/me'); start(); } catch { showLogin(); }
+})();
 
 function head(title, sub, actions = '') { return `<div class="head"><div><h1>${esc(title)}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="row">${actions}</div></div>`; }
 
@@ -153,7 +162,7 @@ async function dashboard() {
     [hooks.length > 0 || keys.length > 0, 'Add a webhook or API key for other software', '#/integrations/webhooks'],
     [true, 'Review styles, sizes and prices', '#/styles'],
   ];
-  $('#main').innerHTML = head('Dashboard', `Welcome back${me.name ? ', ' + esc(me.name) : ''}.`, `<a class="btn ghost" href="/" target="_blank">Open configurator ↗</a>`) + `
+  $('#main').innerHTML = head('Dashboard', `Welcome back${me.name ? ', ' + esc(me.name) : ''}.`, `<a class="btn ghost" href="${CONFIG_URL}" target="_blank">Open configurator ↗</a>`) + `
   <div class="grid g4">
     <div class="card card-pad stat"><div class="lbl">Quotes (30 days)</div><div class="val">${s.last30}</div></div>
     <div class="card card-pad stat"><div class="lbl">Quoted value (30 days)</div><div class="val">${fmt(s.value30)}</div></div>
@@ -199,7 +208,7 @@ async function quotes(id) {
     const rows = [['Quote', 'Date', 'Status', 'First', 'Last', 'Email', 'Phone', 'Address', 'City', 'State', 'ZIP', 'Style', 'Size', 'Options', 'Total', '3D link']];
     for (const x of res.data) rows.push([x.number, x.created_at, x.status, x.customer.first_name, x.customer.last_name, x.customer.email, x.customer.phone, x.customer.address, x.customer.city, x.customer.state, x.customer.zip, x.shed.style, x.shed.size, x.options.map(o => o.name).join('; '), x.pricing.total, x.links.view_3d]);
     const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'shed-quotes.csv'; a.click();
+    saveFile(new Blob([csv], { type: 'text/csv' }), 'shed-quotes.csv');
   });
   await render();
   if (id) quoteDetail(Number(id), render);
@@ -212,8 +221,8 @@ async function quoteDetail(id, refresh) {
     body: `<div class="drawer"><div>
       <div class="row" style="margin-bottom:14px"><a class="btn ghost sm" target="_blank" href="${esc(x.links.view_3d)}">Open in 3D ↗</a>
         <a class="btn ghost sm" target="_blank" href="${esc(x.links.download_3d_model)}">Download 3D model (.glb)</a>
-        <a class="btn ghost sm" target="_blank" href="/api/v1/quotes/${x.id}/floorplan.svg" download="${esc(x.number)}-floor-plan.svg">Download floor plan</a></div>
-      <div class="plan-prev"><img src="/api/v1/quotes/${x.id}/floorplan.svg" alt="Floor plan"></div>
+        <button class="btn ghost sm" id="qPlanDl">Download floor plan</button></div>
+      <div class="plan-prev"><img src="${planUrl(x.id)}" alt="Floor plan"></div>
       <h3 style="margin:18px 0 6px">Line items</h3><div class="lines">${x.pricing_lines.map(l => `<div class="ln"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall ? `<small>${esc(l.wall)}</small>` : ''}</div><div>${fmt(l.amount)}</div></div>`).join('')}
       ${x.pricing.delivery ? `<div class="ln"><div>Delivery</div><div>${fmt(x.pricing.delivery)}</div></div>` : ''}${x.pricing.tax ? `<div class="ln"><div>Tax</div><div>${fmt(x.pricing.tax)}</div></div>` : ''}
       <div class="ln tot"><div>Total</div><div>${fmt(x.pricing.total)}</div></div></div>
@@ -234,6 +243,10 @@ async function quoteDetail(id, refresh) {
         <button class="btn danger" id="qDel">Delete quote</button>
       </div></div></div>`,
     onMount: root => {
+      $('#qPlanDl', root).onclick = guard(async () => {
+        const r = await fetch(planUrl(x.id)); if (!r.ok) throw new Error('Could not load the floor plan');
+        saveFile(new Blob([await r.text()], { type: 'image/svg+xml' }), `${x.number}-floor-plan.svg`);
+      });
       $('#qSave', root).onclick = guard(async () => { await api('PATCH', `/api/v1/quotes/${id}`, { status: $('#qStatus').value, internal_notes: $('#qNotes').value }); toast('Saved'); refresh && refresh(); });
       $('#qResend', root).onclick = guard(async () => { await api('POST', `/api/v1/quotes/${id}/resend`); toast('Queued — check Integrations → Delivery log'); });
       $('#qDel', root).onclick = guard(async () => { if (!confirmBox('Delete this quote permanently?')) return; await api('DELETE', `/api/v1/quotes/${id}`); closeModal(); refresh && refresh(); toast('Deleted'); });
