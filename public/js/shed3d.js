@@ -793,23 +793,28 @@ export class ShedScene {
       }
     }
 
+    // Eave corners: the outer face of the fascia on each side. Rake trim is cut PLUMB (vertical) at
+    // this plane so rake and fascia meet in a clean corner at any pitch.
+    const XL = Math.min(top[0][0], prof[0][0]) - rt, XR = Math.max(top[nSeg][0], prof[nSeg][0]) + rt;
+    const atX = (p, q, x) => { const t = (x - p[0]) / ((q[0] - p[0]) || 1e-6); return [x, p[1] + (q[1] - p[1]) * t]; };
+    const plumb = line => { const l = line.map(p => p.slice()); l[0] = atX(l[0], l[1], XL); l[nSeg] = atX(l[nSeg - 1], l[nSeg], XR); return l; };
+
     // Rake trim along both gable ends (L-shaped metal trim on metal roofs, rake board on shingles)
-    const rakeTop = offLine(th + (metalRoof ? ct + 0.04 : ct + 0.02)), rakeBot = offLine(th - rakeH);
+    const rakeTop = plumb(offLine(th + (metalRoof ? ct + 0.04 : ct + 0.02))), rakeBot = plumb(offLine(th - rakeH));
     for (const zs of [1, -1]) {
       const face = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, rakeBot), { depth: rt, bevelEnabled: false }), M.trim);
       face.position.z = zs > 0 ? RL : -RL - rt; face.castShadow = true; face.userData.solid = true; roofG.add(face);
       if (metalRoof) {
         const legW = 0.28; // leg that laps onto the roof panels
-        const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, offLine(th + 0.004)), { depth: legW, bevelEnabled: false }), M.trim);
+        const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, plumb(offLine(th + 0.004))), { depth: legW, bevelEnabled: false }), M.trim);
         leg.position.z = zs > 0 ? RL - legW : -RL; leg.castShadow = true; leg.userData.solid = true; roofG.add(leg);
       }
     }
-    // Fascia boards along the eaves
+    // Fascia boards along the eaves: top meets the plumb-cut rake exactly, ends run through the rake thickness
     for (const end of [0, nSeg]) {
-      const T = top[end], B = prof[end], left = end === 0;
-      const xo = left ? Math.min(T[0], B[0]) : Math.max(T[0], B[0]);
-      const yt = Math.max(T[1], B[1]) + (metalRoof ? 0.035 : 0.02);
-      const f = box(rt, fasciaH, ridgeLen + 2 * rt, M.trim, xo + (left ? -rt / 2 : rt / 2), yt - fasciaH / 2, 0, roofG);
+      const left = end === 0, X = left ? XL : XR;
+      const yt = rakeTop[end][1];
+      const f = box(rt, fasciaH, ridgeLen + 2 * rt, M.trim, X + (left ? rt / 2 : -rt / 2), yt - fasciaH / 2, 0, roofG);
       f.userData.solid = true;
     }
 
