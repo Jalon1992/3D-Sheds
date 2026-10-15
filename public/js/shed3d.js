@@ -176,6 +176,7 @@ function makeMaterials(style, colors) {
     roofTex,
     roof: (u, v) => new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e'), map: tiled(roofTex, u, v), roughness: style.roof_material === 'metal' ? 0.4 : 0.95, metalness: style.roof_material === 'metal' ? 0.35 : 0 }),
     roofPlain: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e').multiplyScalar(0.85), roughness: 0.8 }),
+    roofTrim: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e'), roughness: 0.45, metalness: 0.3 }),
     door: new THREE.MeshStandardMaterial({ color: c(colors.door, colors.trim || '#f4f4ef'), roughness: 0.6 }),
     window: new THREE.MeshStandardMaterial({ color: c(colors.window, colors.trim || '#f4f4ef'), roughness: 0.55 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x9db6c4, roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.55 }),
@@ -708,7 +709,11 @@ export class ShedScene {
 
     // --- Trim sizes (inches, set per style in the admin)
     const inch = (v, d) => (v === null || v === undefined || v === '' ? d : Number(v)) / 12;
-    const fasciaH = inch(style.fascia_size, 5.5), rakeH = inch(style.rake_size, 5.5), cornerW = inch(style.corner_trim, 5);
+    const fasciaH = inch(style.fascia_size, 5.5), cornerW = inch(style.corner_trim, 5);
+    const metalRoofSel = (config.roof_material || style.roof_material) === 'metal';
+    // Shingle roofs: rake board (trim color). Metal roofs: metal rake trim (roof color) with its own sizes.
+    const rakeH = metalRoofSel ? inch(style.metal_rake_size, 5.5) : inch(style.rake_size, 5.5);
+    const rakeLeg = inch(style.metal_rake_leg, 3.5);
 
     // --- Corner boards
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -802,11 +807,12 @@ export class ShedScene {
     // Rake trim along both gable ends (L-shaped metal trim on metal roofs, rake board on shingles)
     const rakeTop = plumb(offLine(th + (metalRoof ? ct + 0.04 : ct + 0.02))), rakeBot = plumb(offLine(th - rakeH));
     for (const zs of [1, -1]) {
-      const face = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, rakeBot), { depth: rt, bevelEnabled: false }), M.trim);
+      const rakeMat = metalRoof ? M.roofTrim : M.trim;
+      const face = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, rakeBot), { depth: rt, bevelEnabled: false }), rakeMat);
       face.position.z = zs > 0 ? RL : -RL - rt; face.castShadow = true; face.userData.solid = true; roofG.add(face);
       if (metalRoof) {
-        const legW = 0.28; // leg that laps onto the roof panels
-        const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, plumb(offLine(th + 0.004))), { depth: legW, bevelEnabled: false }), M.trim);
+        const legW = Math.max(0.05, rakeLeg); // leg that laps onto the roof panels
+        const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, plumb(offLine(th + 0.004))), { depth: legW, bevelEnabled: false }), rakeMat);
         leg.position.z = zs > 0 ? RL - legW : -RL; leg.castShadow = true; leg.userData.solid = true; roofG.add(leg);
       }
     }
@@ -814,7 +820,8 @@ export class ShedScene {
     for (const end of [0, nSeg]) {
       const left = end === 0, X = left ? XL : XR;
       const yt = rakeTop[end][1];
-      const f = box(rt, fasciaH, ridgeLen + 2 * rt, M.trim, X + (left ? rt / 2 : -rt / 2), yt - fasciaH / 2, 0, roofG);
+      // metal: rake trim (roof color) wraps over the fascia ends; shingles: fascia runs through the rake board
+      const f = box(rt, fasciaH, metalRoof ? ridgeLen : ridgeLen + 2 * rt, M.trim, X + (left ? rt / 2 : -rt / 2), yt - fasciaH / 2, 0, roofG);
       f.userData.solid = true;
     }
 

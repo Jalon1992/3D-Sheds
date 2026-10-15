@@ -88,6 +88,8 @@ for (const sql of [
   'ALTER TABLE styles ADD COLUMN casing_trim REAL',
   'ALTER TABLE styles ADD COLUMN roof_pitch_lower REAL',
   'ALTER TABLE styles ADD COLUMN gambrel_break REAL',
+  'ALTER TABLE styles ADD COLUMN metal_rake_size REAL',
+  'ALTER TABLE styles ADD COLUMN metal_rake_leg REAL',
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------
