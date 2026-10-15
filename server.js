@@ -158,7 +158,7 @@ v1.post('/quotes/:id/resend', (req, res) => {
 
 // ---- Generic CRUD for catalog + webhooks
 const TABLES = {
-  styles: ['name', 'description', 'image_url', 'roof_type', 'ridge_axis', 'wall_height', 'roof_pitch', 'roof_pitch_lower', 'gambrel_break', 'overhang', 'gable_overhang', 'fascia_size', 'rake_size', 'metal_rake_size', 'metal_rake_leg', 'corner_trim', 'casing_trim', 'siding_type', 'roof_material', 'roof_choices', 'standard_options', 'default_colors', 'active', 'sort'],
+  styles: ['name', 'description', 'image_url', 'roof_type', 'ridge_axis', 'wall_height', 'roof_pitch', 'roof_pitch_lower', 'gambrel_break', 'overhang', 'gable_overhang', 'fascia_size', 'rake_size', 'metal_rake_size', 'metal_rake_leg', 'corner_trim', 'casing_trim', 'siding_type', 'trim_type', 'roof_material', 'roof_choices', 'standard_options', 'default_colors', 'active', 'sort'],
   sizes: ['style_id', 'width', 'depth', 'price', 'active', 'sort'],
   colors: ['name', 'hex', 'category', 'material', 'price', 'active', 'sort'],
   options: ['name', 'description', 'category', 'kind', 'placement', 'swap_group', 'width', 'height', 'depth', 'elevation', 'price', 'price_unit', 'model_url', 'image_url', 'plan_label', 'max_qty', 'active', 'sort'],

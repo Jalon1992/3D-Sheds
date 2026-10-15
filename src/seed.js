@@ -97,26 +97,26 @@ export function seed() {
     sizes.forEach(([w, d], i) => ins('sizes', { style_id: id, width: w, depth: d, price: Math.round((w * d * perSqft + baseAdd) / 5) * 5, sort: i }));
   };
   style({
-    name: 'Classic Gable', description: 'Timeless A-frame with lap siding. Door on the gable end.', roof_type: 'gable', ridge_axis: 'depth',
-    wall_height: 7, roof_pitch: 6, overhang: 0.75, gable_overhang: 0.5, siding_type: 'lap', roof_material: 'shingle', sort: 0,
+    name: 'Classic Gable', description: 'Timeless A-frame in LP SmartSide. Door on the gable end.', roof_type: 'gable', ridge_axis: 'depth',
+    wall_height: 7, roof_pitch: 6, overhang: 0.75, gable_overhang: 0.5, siding_type: 'lp_smartside', roof_material: 'shingle', sort: 0,
     default_colors: { siding: C['Clay:siding'], trim: C['White:trim'], roof: C['Charcoal:roof'], door: C['Match Trim:door'] },
     standard_options: [{ option_id: O.door36, wall: 'front', offset: 0 }, { option_id: O.win23, wall: 'left', offset: 0 }, { option_id: O.win23, wall: 'right', offset: 0 }, { option_id: O.vent, wall: 'back', offset: 0 }],
   }, [[8, 8], [8, 10], [8, 12], [10, 12], [10, 14], [10, 16], [12, 16], [12, 20]], 34, 1400);
   style({
     name: 'Lofted Barn', description: 'Gambrel roof with extra headroom and a built-in loft.', roof_type: 'barn', ridge_axis: 'width',
-    wall_height: 7, roof_pitch: 5, roof_pitch_lower: 18, gambrel_break: 42, overhang: 0.6, siding_type: 't111', roof_material: 'shingle', sort: 1,
+    wall_height: 7, roof_pitch: 5, roof_pitch_lower: 18, gambrel_break: 42, overhang: 0.6, siding_type: 'lp_smartside', roof_material: 'shingle', sort: 1,
     default_colors: { siding: C['Barn Red:siding'], trim: C['White:trim'], roof: C['Weathered Wood:roof'], door: C['Match Trim:door'] },
     standard_options: [{ option_id: O.dbl4, wall: 'front', offset: 0 }, { option_id: O.win23, wall: 'front', offset: -3.6 }, { option_id: O.win23, wall: 'front', offset: 3.6 }, { option_id: O.loft, wall: 'left', offset: 0 }],
   }, [[12, 10], [14, 10], [16, 10], [12, 12], [16, 12], [20, 12], [24, 12]], 40, 1600);
   style({
-    name: 'Modern Lean-To', description: 'Single-slope studio look with board & batten and a metal roof.', roof_type: 'lean_to', ridge_axis: 'width',
-    wall_height: 7.5, roof_pitch: 2.5, overhang: 1, siding_type: 'board_batten', roof_material: 'metal', gable_overhang: 0.5, sort: 2,
+    name: 'Modern Lean-To', description: 'Single-slope studio look with a metal roof.', roof_type: 'lean_to', ridge_axis: 'width',
+    wall_height: 7.5, roof_pitch: 2.5, overhang: 1, siding_type: 'lp_smartside', roof_material: 'metal', gable_overhang: 0.5, sort: 2,
     default_colors: { siding: C['Charcoal:siding'], trim: C['Black:trim'], roof: C['Black:roof'], door: C['Natural Wood:door'] },
     standard_options: [{ option_id: O.door9lite, wall: 'front', offset: -2 }, { option_id: O.transom, wall: 'front', offset: 1.75 }],
   }, [[10, 8], [12, 8], [10, 10], [12, 10], [14, 10], [16, 12]], 48, 1800);
   style({
     name: 'Garage', description: 'Tall walls and a roll-up door for mowers, ATVs and workshops.', roof_type: 'gable', ridge_axis: 'depth',
-    wall_height: 8, roof_pitch: 5, overhang: 0.75, siding_type: 'lap', roof_material: 'metal', sort: 3,
+    wall_height: 8, roof_pitch: 5, overhang: 0.75, siding_type: 'lp_smartside', roof_material: 'metal', sort: 3,
     default_colors: { siding: C['Pewter:siding'], trim: C['White:trim'], roof: C['Galvalume:roof'], door: C['Match Trim:door'] },
     standard_options: [{ option_id: O.roll8, wall: 'front', offset: 0 }, { option_id: O.door36, wall: 'right', offset: 2 }, { option_id: O.win23, wall: 'left', offset: 0 }],
   }, [[10, 12], [10, 16], [12, 16], [12, 20], [12, 24], [14, 24]], 42, 2400);

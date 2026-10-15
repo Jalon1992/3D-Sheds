@@ -267,7 +267,8 @@ const STYLE_FIELDS = () => [
   { key: 'roof_pitch', label: 'Roof pitch (rise per 12")', type: 'number', step: '0.25', help: 'e.g. 6 = 6/12. On gambrel roofs this is the upper slope.' },
   { key: 'roof_pitch_lower', label: 'Gambrel lower pitch (rise per 12")', type: 'number', step: '0.25', ph: '18', help: 'Gambrel (barn) roofs only — the steep lower slope.' },
   { key: 'gambrel_break', label: 'Gambrel break (%)', type: 'number', step: '1', ph: '42', help: 'Gambrel only. How far in the break sits, as % of half the shed span (higher = wider steep section).' },
-  { key: 'siding_type', label: 'Siding', type: 'select', options: [['lap', 'Lap siding'], ['board_batten', 'Board & batten'], ['t111', 'T1-11 panel'], ['metal', 'Metal']] },
+  { key: 'siding_type', label: 'Siding', type: 'select', options: [['lp_smartside', 'LP SmartSide panel – 8" o.c. grooves'], ['lap', 'Lap siding'], ['board_batten', 'Board & batten'], ['t111', 'T1-11 panel (smooth)'], ['metal', 'Metal']] },
+  { key: 'trim_type', label: 'Wood trim', type: 'select', options: [['lp', 'LP SmartSide trim (cedar texture)'], ['smooth', 'Smooth trim']], help: 'Corner boards, fascia, door & window trim. Metal trim is always smooth.' },
   { key: 'overhang', label: 'Eave overhang (ft)', type: 'number', step: '0.05', help: 'Along the low sides of the roof (where water runs off).' },
   { key: 'gable_overhang', label: 'Gable overhang (ft)', type: 'number', step: '0.05', help: 'At the gable/rake ends. Blank = same as eave.' },
   { type: 'section', label: 'Trim sizes (inches)' },
@@ -318,7 +319,7 @@ async function renderThumbs() {
 
 function styleEditor(style) {
   const isNew = !style;
-  const s = style || { name: '', roof_type: 'gable', ridge_axis: 'depth', wall_height: 7, roof_pitch: 6, overhang: 0.75, gable_overhang: 0.5, siding_type: 'lap', roof_material: 'shingle', active: 1, sort: catalog.styles.length, sizes: [], standard_options: [], default_colors: {} };
+  const s = style || { name: '', roof_type: 'gable', ridge_axis: 'depth', wall_height: 7, roof_pitch: 6, overhang: 0.75, gable_overhang: 0.5, siding_type: 'lp_smartside', trim_type: 'lp', roof_material: 'shingle', active: 1, sort: catalog.styles.length, sizes: [], standard_options: [], default_colors: {} };
   let sizes = (s.sizes || []).map(z => ({ ...z }));
   if (!sizes.length) sizes = [{ width: 8, depth: 10, price: 3500, active: 1 }, { width: 10, depth: 12, price: 5200, active: 1 }];
   let stds = (s.standard_options || []).map(x => ({ ...x }));

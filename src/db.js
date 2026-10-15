@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS styles (
   roof_type TEXT DEFAULT 'gable',            -- gable | barn | lean_to | saltbox
   ridge_axis TEXT DEFAULT 'depth',           -- depth: gable end faces front; width: eave faces front
   wall_height REAL DEFAULT 7, roof_pitch REAL DEFAULT 6, overhang REAL DEFAULT 0.75,
-  siding_type TEXT DEFAULT 'lap',            -- lap | board_batten | t111 | metal
+  siding_type TEXT DEFAULT 'lp_smartside',   -- lp_smartside | lap | board_batten | t111 | metal
   roof_material TEXT DEFAULT 'shingle',      -- default/included roofing: shingle | metal
   roof_choices TEXT DEFAULT '["shingle","metal"]', -- roofing materials customers may pick
   gable_overhang REAL,                       -- rake overhang at gable ends (null = same as eave)
@@ -90,6 +90,7 @@ for (const sql of [
   'ALTER TABLE styles ADD COLUMN gambrel_break REAL',
   'ALTER TABLE styles ADD COLUMN metal_rake_size REAL',
   'ALTER TABLE styles ADD COLUMN metal_rake_leg REAL',
+  `ALTER TABLE styles ADD COLUMN trim_type TEXT DEFAULT 'lp'`,
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------

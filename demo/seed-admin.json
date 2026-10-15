@@ -4,14 +4,14 @@
    {
     "id": 1,
     "name": "Classic Gable",
-    "description": "Timeless A-frame with lap siding. Door on the gable end.",
+    "description": "Timeless A-frame in LP SmartSide. Door on the gable end.",
     "image_url": null,
     "roof_type": "gable",
     "ridge_axis": "depth",
     "wall_height": 7,
     "roof_pitch": 6,
     "overhang": 0.75,
-    "siding_type": "lap",
+    "siding_type": "lp_smartside",
     "roof_material": "shingle",
     "roof_choices": [
      "shingle",
@@ -56,6 +56,7 @@
     "gambrel_break": null,
     "metal_rake_size": null,
     "metal_rake_leg": null,
+    "trim_type": "lp",
     "sizes": [
      {
       "id": 1,
@@ -141,7 +142,7 @@
     "wall_height": 7,
     "roof_pitch": 5,
     "overhang": 0.6,
-    "siding_type": "t111",
+    "siding_type": "lp_smartside",
     "roof_material": "shingle",
     "roof_choices": [
      "shingle",
@@ -186,6 +187,7 @@
     "gambrel_break": 42,
     "metal_rake_size": null,
     "metal_rake_leg": null,
+    "trim_type": "lp",
     "sizes": [
      {
       "id": 9,
@@ -255,14 +257,14 @@
    {
     "id": 3,
     "name": "Modern Lean-To",
-    "description": "Single-slope studio look with board & batten and a metal roof.",
+    "description": "Single-slope studio look with a metal roof.",
     "image_url": null,
     "roof_type": "lean_to",
     "ridge_axis": "width",
     "wall_height": 7.5,
     "roof_pitch": 2.5,
     "overhang": 1,
-    "siding_type": "board_batten",
+    "siding_type": "lp_smartside",
     "roof_material": "metal",
     "roof_choices": [
      "shingle",
@@ -297,6 +299,7 @@
     "gambrel_break": null,
     "metal_rake_size": null,
     "metal_rake_leg": null,
+    "trim_type": "lp",
     "sizes": [
      {
       "id": 16,
@@ -364,7 +367,7 @@
     "wall_height": 8,
     "roof_pitch": 5,
     "overhang": 0.75,
-    "siding_type": "lap",
+    "siding_type": "lp_smartside",
     "roof_material": "metal",
     "roof_choices": [
      "shingle",
@@ -404,6 +407,7 @@
     "gambrel_break": null,
     "metal_rake_size": null,
     "metal_rake_leg": null,
+    "trim_type": "lp",
     "sizes": [
      {
       "id": 22,

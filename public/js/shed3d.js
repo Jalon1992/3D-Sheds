@@ -29,7 +29,46 @@ function noise(g, n, a, b, alpha = 0.05) {
     g.fillRect(Math.random() * a, Math.random() * b, 1 + Math.random() * 2, 1 + Math.random() * 2);
   }
 }
+// ---- LP SmartSide: embossed cedar-grain engineered wood -------------------------------
+// Panel siding: 4 ft tile, V-grooves every 8" o.c. Grain runs vertically (panels stand vertical).
+function cedarGrain(g, n, seedStart, strength, vertical = true) {
+  let seed = seedStart; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < n * 1.6; i++) {
+    const a = rnd() * n, len = 30 + rnd() * 180, w = 1 + rnd() * 2.2, off = rnd() * n;
+    const v = rnd() > 0.5 ? 0 : 255, alpha = (0.03 + rnd() * 0.07) * strength;
+    g.strokeStyle = `rgba(${v},${v},${v},${alpha})`; g.lineWidth = w;
+    g.beginPath();
+    const wob = 2 + rnd() * 5;
+    if (vertical) { g.moveTo(a, off); g.bezierCurveTo(a + wob, off + len / 3, a - wob, off + 2 * len / 3, a + rnd() * 2, off + len); }
+    else { g.moveTo(off, a); g.bezierCurveTo(off + len / 3, a + wob, off + 2 * len / 3, a - wob, off + len, a + rnd() * 2); }
+    g.stroke();
+  }
+}
+const lpPanel = bump => canvasTex(bump ? 'lp-panel-bump' : 'lp-panel', 1024, (g, n) => {
+  g.fillStyle = bump ? '#9a9a9a' : '#ececec'; g.fillRect(0, 0, n, n);
+  cedarGrain(g, n, 11, bump ? 3.2 : 1.1, true);
+  // tiny pores of the embossed cedar texture
+  if (!bump) noise(g, n, n, n, 0.035);
+  const step = n / 6; // 6 grooves per 4 ft = 8" o.c.
+  for (let i = 0; i < 6; i++) {
+    const x = i * step;
+    // V-groove: dark centre, shaded walls
+    const gr = g.createLinearGradient(x - 7, 0, x + 7, 0);
+    if (bump) { gr.addColorStop(0, '#9a9a9a'); gr.addColorStop(0.5, '#000'); gr.addColorStop(1, '#9a9a9a'); }
+    else { gr.addColorStop(0, 'rgba(0,0,0,0.05)'); gr.addColorStop(0.45, 'rgba(0,0,0,0.42)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.30)'); gr.addColorStop(1, 'rgba(255,255,255,0.25)'); }
+    g.fillStyle = gr; g.fillRect(x - 7, 0, 14, n);
+  }
+}, 4);
+// Trim: short cedar flecks in both directions so grain reads on every face of a board.
+const lpTrim = bump => canvasTex(bump ? 'lp-trim-bump' : 'lp-trim', 256, (g, n) => {
+  g.fillStyle = bump ? '#9a9a9a' : '#eeeeee'; g.fillRect(0, 0, n, n);
+  cedarGrain(g, n, 23, bump ? 2.0 : 0.38, true);
+  cedarGrain(g, n, 37, bump ? 1.0 : 0.18, false);
+  if (!bump) noise(g, n, n, n, 0.015);
+}, 1);
+
 const SIDING = {
+  lp_smartside: () => lpPanel(false),
   lap: () => canvasTex('lap', 512, (g, n) => {
     g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, n, n);
     const row = n / 8; // 6" exposure on a 4' tile
@@ -166,10 +205,20 @@ function tiled(tex, uFt, vFt) {
 // ---------------------------------------------------------------------------
 function makeMaterials(style, colors) {
   const c = (hex, d) => new THREE.Color(hex || d);
-  const sidingTex = (SIDING[style.siding_type] || SIDING.lap)();
-  const siding = new THREE.MeshStandardMaterial({ color: c(colors.siding, '#c2b49a'), map: sidingTex, roughness: style.siding_type === 'metal' ? 0.45 : 0.85, metalness: style.siding_type === 'metal' ? 0.25 : 0 });
+  const sidingType = style.siding_type || 'lp_smartside';
+  const sidingTex = (SIDING[sidingType] || SIDING.lp_smartside)();
+  const siding = new THREE.MeshStandardMaterial({ color: c(colors.siding, '#c2b49a'), map: sidingTex, roughness: sidingType === 'metal' ? 0.45 : 0.85, metalness: sidingType === 'metal' ? 0.25 : 0 });
   siding.map.repeat.set(1 / sidingTex.userData.tileFt, 1 / sidingTex.userData.tileFt);
-  const trim = new THREE.MeshStandardMaterial({ color: c(colors.trim, '#f4f4ef'), roughness: 0.7 });
+  if (sidingType === 'lp_smartside') {
+    const b = lpPanel(true); b.colorSpace = THREE.NoColorSpace; b.repeat.set(1 / 4, 1 / 4);
+    siding.bumpMap = b; siding.bumpScale = 1.6;
+  }
+  // Wood trim: LP SmartSide trim (embossed cedar) unless the style asks for smooth trim. Metal trim stays smooth.
+  const trim = new THREE.MeshStandardMaterial({ color: c(colors.trim, '#f4f4ef'), roughness: 0.78 });
+  if ((style.trim_type || 'lp') === 'lp') {
+    const tb = lpTrim(true); tb.colorSpace = THREE.NoColorSpace;
+    trim.map = lpTrim(false); trim.bumpMap = tb; trim.bumpScale = 0.7;
+  }
   const roofTex = style.roof_material === 'metal' ? metalRoofTex() : shingleTex();
   return {
     siding, trim,

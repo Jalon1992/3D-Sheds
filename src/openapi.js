@@ -106,7 +106,7 @@ Failed deliveries are retried after 1s, 5s and 25s.
             fascia_size: { type: 'number', description: 'Fascia board height (inches, default 5.5)' }, rake_size: { type: 'number', description: 'Shingle-roof rake board height (inches, default 5.5)' }, metal_rake_size: { type: 'number', description: 'Metal rake trim height (inches, default 5.5)' }, metal_rake_leg: { type: 'number', description: 'Metal rake trim leg onto the panels (inches, default 3.5)' },
             corner_trim: { type: 'number', description: 'Corner board width (inches, default 5)' }, casing_trim: { type: 'number', description: 'Door/window trim width (inches, default 4)' },
             roof_choices: { type: 'array', items: { type: 'string' }, description: 'Roofing materials customers may choose' },
-            siding_type: { type: 'string', enum: ['lap', 'board_batten', 't111', 'metal'] }, roof_material: { type: 'string', description: 'Default (included) roofing material key' },
+            siding_type: { type: 'string', enum: ['lp_smartside', 'lap', 'board_batten', 't111', 'metal'] }, trim_type: { type: 'string', enum: ['lp', 'smooth'] }, roof_material: { type: 'string', description: 'Default (included) roofing material key' },
             standard_options: { type: 'array', items: { type: 'object', properties: { option_id: { type: 'integer' }, wall: { type: 'string' }, offset: { type: 'number' } } } },
             default_colors: { type: 'object' }, active: { type: 'integer' }, sort: { type: 'integer' },
           },
