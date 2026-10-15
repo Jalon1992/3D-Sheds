@@ -136,6 +136,7 @@ export function findSpot(geo, optById, items, opt, prefWall, prefOffset = 0, ign
   for (const wall of walls) {
     if (opt.kind === 'vent' && !geo.isGable(wall)) continue;
     if (opt.placement === 'loft') {
+      if (!geo.isGable(wall)) continue; // lofts span an end (gable) wall
       if (!items.some(i => i.wall === wall && optById[i.option_id]?.placement === 'loft' && i.uid !== ignoreUid)) return { wall, offset: 0 };
       continue;
     }

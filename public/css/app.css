@@ -113,6 +113,7 @@ h3:first-of-type { margin-top: 0; }
 .walls { display: flex; gap: 4px; }
 .walls button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
 .walls button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.walls button:disabled { opacity: .4; cursor: not-allowed; }
 .mv { display: flex; gap: 4px; margin-left: auto; }
 .mv button { width: 34px; height: 32px; border: 1px solid var(--line); background: #fff; border-radius: 8px; display: grid; place-items: center; }
 .ic-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }

@@ -27,7 +27,7 @@ export function seed() {
     });
   }
   if (getSettings().roofing === undefined) setSettings({ roofing: DEFAULT_ROOFING });
-  if (getSettings().downgrade_credit === undefined) setSettings({ downgrade_credit: true, remove_credit: false });
+  if (getSettings().downgrade_credit === undefined) setSettings({ downgrade_credit: true, remove_credit: true });
 
   if (get('SELECT id FROM styles LIMIT 1')) return;
 
@@ -103,7 +103,7 @@ export function seed() {
     name: 'Lofted Barn', description: 'Gambrel roof with extra headroom and a built-in loft.', roof_type: 'barn', ridge_axis: 'width',
     wall_height: 7, roof_pitch: 6, overhang: 0.6, siding_type: 't111', roof_material: 'shingle', sort: 1,
     default_colors: { siding: C['Barn Red:siding'], trim: C['White:trim'], roof: C['Weathered Wood:roof'], door: C['Match Trim:door'] },
-    standard_options: [{ option_id: O.dbl4, wall: 'front', offset: 0 }, { option_id: O.winsh, wall: 'front', offset: -3.75 }, { option_id: O.winsh, wall: 'front', offset: 3.75 }, { option_id: O.loft, wall: 'left', offset: 0 }],
+    standard_options: [{ option_id: O.dbl4, wall: 'front', offset: 0 }, { option_id: O.win23, wall: 'front', offset: -3.6 }, { option_id: O.win23, wall: 'front', offset: 3.6 }, { option_id: O.loft, wall: 'left', offset: 0 }],
   }, [[12, 10], [14, 10], [16, 10], [12, 12], [16, 12], [20, 12], [24, 12]], 40, 1600);
   style({
     name: 'Modern Lean-To', description: 'Single-slope studio look with board & batten and a metal roof.', roof_type: 'lean_to', ridge_axis: 'width',

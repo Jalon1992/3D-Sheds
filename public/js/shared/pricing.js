@@ -101,7 +101,7 @@ export function priceConfig(catalog, config) {
   const lines = [];
   // Pricing rules (Admin → Settings → Pricing)
   const credits = settings.downgrade_credit !== false;   // swapping a standard item for a cheaper one lowers the price
-  const removeCredit = settings.remove_credit === true;  // removing a standard item credits its price
+  const removeCredit = settings.remove_credit !== false; // removing a standard item credits its price
 
   lines.push({ type: 'base', label: `${style.name} ${size.width}' x ${size.depth}'`, amount: Number(size.price) || 0 });
 
