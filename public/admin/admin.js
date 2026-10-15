@@ -660,6 +660,8 @@ const SETTINGS_FIELDS = [
   { key: 'show_prices', label: 'Show prices to customers', type: 'checkbox' }, { key: 'currency_symbol', label: 'Currency symbol' },
   { key: 'delivery_fee', label: 'Delivery fee ($)', type: 'number', step: '0.01' }, { key: 'tax_rate', label: 'Sales tax (%)', type: 'number', step: '0.001' },
   { key: 'tax_delivery', label: 'Charge tax on delivery', type: 'checkbox' },
+  { key: 'downgrade_credit', label: 'Lower the price when a customer swaps a standard item (door, window, roofing) for a cheaper one', type: 'checkbox', full: true },
+  { key: 'remove_credit', label: 'Credit the price of a standard item when the customer removes it', type: 'checkbox', full: true },
   { type: 'section', label: 'Quote form' },
   { key: 'require_phone', label: 'Phone number is required', type: 'checkbox' },
   { key: 'consent_text', label: 'SMS / call consent text (A2P)', type: 'textarea', full: true, help: 'Leave blank to hide the checkbox.' },

@@ -48,6 +48,16 @@ body.embed .topbar { --top-h: 56px; }
 .total small { display: block; color: var(--ink-3); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
 .total strong { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
 .nav { display: flex; gap: 8px; }
+.total { position: relative; }
+.total strong { display: inline-block; transition: color .3s; }
+.total strong.bump { animation: bump .45s ease-out; }
+@keyframes bump { 30% { transform: scale(1.07); } }
+.delta { position: absolute; left: 0; top: -22px; font-size: 13px; font-weight: 800; padding: 2px 8px; border-radius: 999px; opacity: 0; pointer-events: none; white-space: nowrap; }
+.delta.up { background: #fff1e6; color: #b54708; } .delta.down { background: #e7f6ec; color: #067647; }
+.delta.show { animation: deltaPop 1.8s ease-out forwards; }
+@keyframes deltaPop { 0% { opacity: 0; transform: translateY(6px); } 12% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+.neg { color: #067647 !important; }
+@media (prefers-reduced-motion: reduce) { .total strong.bump, .delta.show { animation: none; } .delta.show { opacity: 1; } }
 
 h2 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.02em; }
 .sub { margin: 0 0 20px; color: var(--ink-2); font-size: 14px; line-height: 1.5; }

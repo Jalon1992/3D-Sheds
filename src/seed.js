@@ -27,6 +27,7 @@ export function seed() {
     });
   }
   if (getSettings().roofing === undefined) setSettings({ roofing: DEFAULT_ROOFING });
+  if (getSettings().downgrade_credit === undefined) setSettings({ downgrade_credit: true, remove_credit: false });
 
   if (get('SELECT id FROM styles LIMIT 1')) return;
 

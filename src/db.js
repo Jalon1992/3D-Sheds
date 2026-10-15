@@ -115,7 +115,7 @@ export function setSettings(obj) {
 // Settings that are safe to expose to the public configurator
 export const PUBLIC_SETTINGS = ['company_name', 'logo_url', 'brand_color', 'currency_symbol', 'tax_rate', 'tax_delivery',
   'delivery_fee', 'show_prices', 'success_message', 'consent_text', 'phone', 'website', 'privacy_url', 'require_phone',
-  'headline', 'thank_you_url', 'roofing'];
+  'headline', 'thank_you_url', 'roofing', 'downgrade_credit', 'remove_credit'];
 
 // ---- Catalog (what the configurator needs) ----------------------------------
 export function getCatalog({ includeInactive = false } = {}) {

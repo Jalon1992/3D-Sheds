@@ -704,27 +704,55 @@ export class ShedScene {
     const roofG = new THREE.Group(); roofG.position.y = y0 + H; shed.add(roofG); this.roofGroup = roofG;
     if (!geo.ridgeAlongZ) roofG.rotation.y = -Math.PI / 2;
     const ov = geo.eaveOv, th = 0.22;
-    const ridgeLen = geo.L + 2 * geo.gableOv;
+    const ridgeLen = geo.L + 2 * geo.gableOv, RL = ridgeLen / 2;
+    const metalRoof = M.roofTex.userData.tileFt === 3;
+    // Bottom (underside) profile, with the eave overhang added to the first/last segment
     const prof = geo.profile.map(p => p.slice());
     const nSeg = prof.length - 1;
+    const dirOf = (a, b) => { const du = b[0] - a[0], dh = b[1] - a[1], l = Math.hypot(du, dh); return [du / l, dh / l]; };
+    { const [ux, uy] = dirOf(prof[0], prof[1]), k = ov / Math.max(ux, 0.3); prof[0] = [prof[0][0] - ux * k, prof[0][1] - uy * k]; }
+    { const [ux, uy] = dirOf(prof[nSeg - 1], prof[nSeg]), k = ov / Math.max(ux, 0.3); prof[nSeg] = [prof[nSeg][0] + ux * k, prof[nSeg][1] + uy * k]; }
+    const normal = i => { const [ux, uy] = dirOf(prof[i], prof[i + 1]); return [-uy, ux]; };
+    // Top surface points: each slope offset by the roof thickness, mitred where two slopes meet
+    const top = prof.map((p, i) => {
+      if (i === 0 || i === nSeg) { const n = normal(i === 0 ? 0 : nSeg - 1); return [p[0] + n[0] * th, p[1] + n[1] * th]; }
+      const n1 = normal(i - 1), n2 = normal(i), bis = [n1[0] + n2[0], n1[1] + n2[1]];
+      const cos = (n1[0] * bis[0] + n1[1] * bis[1]) / Math.hypot(...bis);
+      const k = th / cos / Math.hypot(...bis);
+      return [p[0] + bis[0] * k, p[1] + bis[1] * k];
+    });
     for (let i = 0; i < nSeg; i++) {
-      let [u0, h0] = prof[i], [u1, h1] = prof[i + 1];
-      const du = u1 - u0, dh = h1 - h0, len = Math.hypot(du, dh), ux = du / len, uy = dh / len;
-      if (i === 0) { u0 -= ux * ov / Math.max(ux, 0.3); h0 -= uy * ov / Math.max(ux, 0.3); }
-      if (i === nSeg - 1) { u1 += ux * ov / Math.max(ux, 0.3); h1 += uy * ov / Math.max(ux, 0.3); }
-      const L2 = Math.hypot(u1 - u0, h1 - h0);
-      const nx = -uy, ny = ux;
-      const mats = [M.trim, M.trim, M.roof(L2, ridgeLen), M.trim, M.trim, M.trim];
-      const seg = new THREE.Mesh(new THREE.BoxGeometry(L2 + 0.02, th, ridgeLen), mats);
-      seg.position.set((u0 + u1) / 2 + nx * th / 2, (h0 + h1) / 2 + ny * th / 2, 0);
-      seg.rotation.z = Math.atan2(dh, du); seg.castShadow = seg.receiveShadow = true; seg.userData.solid = true;
-      roofG.add(seg);
+      const B0 = prof[i], B1 = prof[i + 1], T0 = top[i], T1 = top[i + 1];
+      // solid slab (trim colour on edges/underside) – top sunk a hair below the textured skin
+      const n = normal(i), e = 0.006;
+      const shape = new THREE.Shape([new THREE.Vector2(B0[0], B0[1]), new THREE.Vector2(B1[0], B1[1]),
+        new THREE.Vector2(T1[0] - n[0] * e, T1[1] - n[1] * e), new THREE.Vector2(T0[0] - n[0] * e, T0[1] - n[1] * e)]);
+      const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: ridgeLen, bevelEnabled: false }), M.trim);
+      slab.position.z = -RL; slab.castShadow = slab.receiveShadow = true; slab.userData.solid = true; roofG.add(slab);
+      // textured roof skin (u runs down/up the slope, v along the ridge)
+      const len = Math.hypot(T1[0] - T0[0], T1[1] - T0[1]);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([T0[0], T0[1], -RL, T1[0], T1[1], -RL, T1[0], T1[1], RL, T0[0], T0[1], RL], 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+      g.setIndex([0, 2, 1, 0, 3, 2]); g.computeVertexNormals();
+      const skin = new THREE.Mesh(g, M.roof(len, ridgeLen)); skin.castShadow = skin.receiveShadow = true; skin.userData.solid = true; roofG.add(skin);
     }
-    // ridge cap / hip trims
+    // Ridge cap and gambrel transition caps: bent over the joint, one leaf down each slope
     for (let i = 1; i < nSeg; i++) {
-      const [u, h] = prof[i];
-      const metal = M.roofTex.userData.tileFt === 3;
-      const cap = box(metal ? 0.9 : 0.5, metal ? 0.08 : 0.14, ridgeLen + 0.02, M.roofPlain, u, h + th + (metal ? 0.0 : 0.03), 0, roofG); cap.userData.solid = true;
+      const P = top[i], capW = metalRoof ? 0.6 : 0.45, ct = metalRoof ? 0.05 : 0.09;
+      for (const [a, b] of [[i, i - 1], [i, i + 1]]) {
+        const d = [top[b][0] - P[0], top[b][1] - P[1]], l = Math.hypot(...d), ux = d[0] / l, uy = d[1] / l;
+        const segIdx = Math.min(a, b), n = normal(segIdx);
+        const leaf = box(capW, ct, ridgeLen + 0.04, M.roofPlain,
+          P[0] + ux * capW / 2 + n[0] * ct / 2, P[1] + uy * capW / 2 + n[1] * ct / 2, 0, roofG);
+        leaf.rotation.z = Math.atan2(uy, ux); leaf.userData.solid = true;
+      }
+      // fill the small wedge on top of the joint so the bend looks continuous
+      const n1 = normal(i - 1), n2 = normal(i);
+      const q1 = [P[0] + n1[0] * ct, P[1] + n1[1] * ct], q2 = [P[0] + n2[0] * ct, P[1] + n2[1] * ct];
+      const wedge = new THREE.Shape([new THREE.Vector2(P[0], P[1]), new THREE.Vector2(q2[0], q2[1]), new THREE.Vector2(q1[0], q1[1])]);
+      const wm2 = new THREE.Mesh(new THREE.ExtrudeGeometry(wedge, { depth: ridgeLen + 0.04, bevelEnabled: false }), M.roofPlain);
+      wm2.position.z = -RL - 0.02; wm2.castShadow = true; wm2.userData.solid = true; roofG.add(wm2);
     }
     // fascia along eaves
     // (box sides already render in trim colour)

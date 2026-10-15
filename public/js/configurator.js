@@ -69,9 +69,18 @@ function rebuild() {
   scene.build(state.catalog, state.config);
   renderTotal();
 }
+let lastTotal = null;
 function renderTotal() {
   const p = pricing();
   $('#total').textContent = p ? (showPrices() ? fmt(p.subtotal) : '—') : '—';
+  if (p && showPrices() && lastTotal !== null && Math.abs(p.subtotal - lastTotal) >= 0.5) {
+    const d = p.subtotal - lastTotal, el = $('#delta');
+    el.textContent = (d > 0 ? '+' : '') + fmt(d);
+    el.className = 'delta ' + (d > 0 ? 'up' : 'down');
+    void el.offsetWidth; el.classList.add('show');
+    $('#total').classList.remove('bump'); void $('#total').offsetWidth; $('#total').classList.add('bump');
+  }
+  if (p) lastTotal = p.subtotal;
   $('#totalLabel').textContent = showPrices() ? 'Your price' : 'Price on request';
 }
 function optDelta(o, it) {
@@ -213,12 +222,13 @@ function selectItem(uid) {
   const movable = o.placement !== 'loft';
   card.innerHTML = `
     <div class="ic-head"><div><div class="ic-title">${esc(o.name)}</div>
-      <div class="ic-meta">${isStd ? 'Included standard' : (showPrices() ? fmt(price) : '')}${it.wall && WALLS.includes(it.wall) ? ' · ' + it.wall + ' wall' : ''}</div></div>
+      <div class="ic-meta">${isStd ? 'Included standard' : (showPrices() ? (price < 0 ? fmt(price) + ' credit' : '+' + fmt(price)) : '')}${it.wall && WALLS.includes(it.wall) ? ' · ' + it.wall + ' wall' : ''}</div></div>
       <button class="x" data-act="close" aria-label="Close">&times;</button></div>
     ${alts.length > 1 ? `<div class="ic-label">${it.standard_of ? 'Upgrade or change' : 'Change to'}</div>
     <div class="swaps">${alts.map(a => {
-      const d = optDelta(a, it);
-      return `<button class="swap ${a.id === o.id ? 'on' : ''}" data-swap="${a.id}"><div class="ico">${iconFor(a)}</div><b>${esc(a.name)}</b>${showPrices() ? `<span>${d ? (it.standard_of ? '+' : '') + fmt(d) : (it.standard_of ? 'Included' : fmt(0))}</span>` : ''}</button>`;
+      const d = optDelta(a, it) - price;
+      const tag = a.id === o.id ? (isStd ? 'Included' : 'Selected') : (Math.abs(d) < 0.5 ? 'Same price' : (d > 0 ? '+' : '') + fmt(d));
+      return `<button class="swap ${a.id === o.id ? 'on' : ''}" data-swap="${a.id}"><div class="ico">${iconFor(a)}</div><b>${esc(a.name)}</b>${showPrices() ? `<span class="${d < -0.4 ? 'neg' : ''}">${tag}</span>` : ''}</button>`;
     }).join('')}</div>` : ''}
     ${(wallable || movable) ? `<div class="ic-label">Position</div><div class="ic-row">
       ${wallable ? `<div class="walls">${WALLS.map(w => `<button data-wall="${w}" class="${it.wall === w ? 'on' : ''}">${w}</button>`).join('')}</div>` : ''}
@@ -296,7 +306,8 @@ function roofDelta(mat) {
   const st = curStyle(), z = curSize();
   const std = roofingList(state.catalog).find(r => r.key === st.roof_material);
   if (!std || std.key === mat.key) return 0;
-  return Math.round(Math.max(0, roofMaterialPrice(mat, st, z) - roofMaterialPrice(std, st, z)));
+  const d = roofMaterialPrice(mat, st, z) - roofMaterialPrice(std, st, z);
+  return Math.round(S().downgrade_credit === false ? Math.max(0, d) : d);
 }
 function renderColors() {
   const groups = [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof color'], ['door', 'Doors']];
@@ -306,7 +317,7 @@ function renderColors() {
   if (choices.length > 1) {
     html += `<h3>Roofing</h3><div class="roofs">${choices.map(r => {
       const d = roofDelta(r);
-      return `<button class="roofopt ${r.key === state.config.roof_material ? 'on' : ''}" data-roofmat="${esc(r.key)}"><span class="ri">${ROOF_ICONS[r.key] || ROOF_ICONS.shingle}</span><span class="rt"><b>${esc(r.name)}</b>${r.description ? `<small>${esc(r.description)}</small>` : ''}</span>${showPrices() ? `<em>${d ? '+' + fmt(d) : 'Included'}</em>` : ''}</button>`;
+      return `<button class="roofopt ${r.key === state.config.roof_material ? 'on' : ''}" data-roofmat="${esc(r.key)}"><span class="ri">${ROOF_ICONS[r.key] || ROOF_ICONS.shingle}</span><span class="rt"><b>${esc(r.name)}</b>${r.description ? `<small>${esc(r.description)}</small>` : ''}</span>${showPrices() ? `<em class="${d < 0 ? 'neg' : ''}">${d ? (d > 0 ? '+' : '') + fmt(d) : 'Included'}</em>` : ''}</button>`;
     }).join('')}</div>`;
   }
   html += groups.map(([k, label]) => {
@@ -354,7 +365,7 @@ function renderQuote() {
   const lines = p.lines.filter(l => l.type !== 'color' || l.amount);
   const st = S();
   return `<h2>Your quote</h2><p class="sub">Review your shed and tell us where to send your quote.</p>
-  <div class="lines">${lines.map(l => `<div class="line"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall && WALLS.includes(l.wall) ? `<small>${esc(l.wall)} wall</small>` : ''}</div><div>${sp ? (l.note === 'Standard' ? 'Included' : fmt(l.amount)) : ''}</div></div>`).join('')}
+  <div class="lines">${lines.map(l => `<div class="line"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall && WALLS.includes(l.wall) ? `<small>${esc(l.wall)} wall</small>` : ''}</div><div class="${l.amount < 0 ? 'neg' : ''}">${sp ? (l.note === 'Standard' ? 'Included' : fmt(l.amount)) : ''}</div></div>`).join('')}
   ${sp && p.delivery ? `<div class="line"><div>Delivery</div><div>${fmt(p.delivery)}</div></div>` : ''}
   ${sp && p.tax ? `<div class="line"><div>Tax (${p.tax_rate}%)</div><div>${fmt(p.tax)}</div></div>` : ''}
   ${sp ? `<div class="line tot"><div>Total</div><div>${fmt(p.total)}</div></div>` : ''}</div>
@@ -510,6 +521,7 @@ async function boot() {
 
   scene = new ShedScene($('#viewport'), {
     onSelect: uid => { selectItem(uid); $('#hint').classList.add('gone'); },
+    ...(new URLSearchParams(location.search).has('debug') ? {} : {}),
     onDrag: dragItem,
     onDragEnd: uid => { $('#viewport').classList.remove('dragging'); selectItem(uid); renderPanelIfOptions(); },
   });
@@ -533,6 +545,7 @@ async function boot() {
     if (params.get('style')) { state.step = 1; state.maxStep = 1; }
   }
   rebuild();
+  if (params.has('debug')) window.__shed = { scene, state };
   renderSteps(); renderPanel();
   setTimeout(() => $('#loading').classList.add('gone'), 150);
   setTimeout(() => $('#hint').classList.add('gone'), 9000);

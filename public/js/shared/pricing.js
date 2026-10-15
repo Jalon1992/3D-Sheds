@@ -35,8 +35,9 @@ export function roofColorsFor(catalog, matKey) {
 }
 
 export function money(n, symbol = '$') {
-  const v = Math.round((Number(n) || 0) * 100) / 100;
-  return symbol + v.toLocaleString('en-US', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const raw = Math.round((Number(n) || 0) * 100) / 100;
+  const v = Math.abs(raw);
+  return (raw < 0 ? '−' : '') + symbol + v.toLocaleString('en-US', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
 }
 
 /** Price of one option for a given shed size, before standard-option credit. */
@@ -98,6 +99,9 @@ export function priceConfig(catalog, config) {
   const optById = Object.fromEntries(catalog.options.map(o => [o.id, o]));
   const colorById = Object.fromEntries(catalog.colors.map(c => [c.id, c]));
   const lines = [];
+  // Pricing rules (Admin → Settings → Pricing)
+  const credits = settings.downgrade_credit !== false;   // swapping a standard item for a cheaper one lowers the price
+  const removeCredit = settings.remove_credit === true;  // removing a standard item credits its price
 
   lines.push({ type: 'base', label: `${style.name} ${size.width}' x ${size.depth}'`, amount: Number(size.price) || 0 });
 
@@ -107,8 +111,10 @@ export function priceConfig(catalog, config) {
   if (mat) {
     const std = roofing.find(r => r.key === style.roof_material);
     const isStd = !std || std.key === mat.key;
-    const amt = isStd ? 0 : Math.max(0, roofMaterialPrice(mat, style, size) - roofMaterialPrice(std, style, size));
-    lines.push({ type: 'roof', label: `Roofing: ${mat.name}`, amount: Math.round(amt), roof_material: mat.key, note: isStd ? 'Standard' : `Upgrade from ${std.name}` });
+    let amt = isStd ? 0 : roofMaterialPrice(mat, style, size) - roofMaterialPrice(std, style, size);
+    if (!credits) amt = Math.max(0, amt);
+    lines.push({ type: 'roof', label: `Roofing: ${mat.name}`, amount: Math.round(amt), roof_material: mat.key,
+      note: isStd ? 'Standard' : `${amt < 0 ? 'Change' : 'Upgrade'} from ${std.name}` });
   }
 
   for (const [cat, id] of Object.entries(config.colors || {})) {
@@ -128,14 +134,25 @@ export function priceConfig(catalog, config) {
       else {
         const orig = optById[it.standard_of];
         const credit = orig ? optionPrice(orig, size, 1, it.wall) : 0;
-        amt = Math.max(0, amt - credit);
-        note = orig ? `Upgrade from ${orig.name}` : 'Upgrade';
+        amt = amt - credit;
+        if (!credits) amt = Math.max(0, amt);
+        note = orig ? `${amt < 0 ? 'Change' : 'Upgrade'} from ${orig.name}` : 'Upgrade';
       }
     }
     lines.push({
       type: 'option', label: o.name, amount: round2(amt), option_id: o.id, uid: it.uid,
       category: o.category, wall: it.wall || null, note,
     });
+  }
+
+  if (removeCredit) {
+    const want = {}, have = {};
+    for (const so of style.standard_options || []) want[so.option_id] = (want[so.option_id] || 0) + 1;
+    for (const it of config.items || []) if (it.standard_of) have[it.standard_of] = (have[it.standard_of] || 0) + 1;
+    for (const [id, n] of Object.entries(want)) {
+      const o = optById[id]; const missing = n - (have[id] || 0);
+      for (let k = 0; k < missing && o; k++) lines.push({ type: 'option', label: `Removed: ${o.name}`, amount: -round2(optionPrice(o, size, 1)), option_id: o.id, category: o.category, note: 'Credit for removed standard item' });
+    }
   }
 
   const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
