@@ -1,6 +1,6 @@
 // Customer-facing configurator: Style → Size → Colors → Options → Quote.
 import { ShedScene } from './shed3d.js';
-import { defaultConfig, priceConfig, money, WALLS, roofChoices, roofColorsFor, roofMaterialPrice, roofingList } from './shared/pricing.js';
+import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, roofChoices, roofColorsFor, roofMaterialPrice, roofingList } from './shared/pricing.js';
 import { shedGeometry, findSpot, canPlace } from './shared/geometry.js';
 import { floorPlanSVG } from './shared/floorplan.js';
 
@@ -337,10 +337,11 @@ function roofDelta(mat) {
   return Math.round(S().downgrade_credit === false ? Math.max(0, d) : d);
 }
 function renderColors() {
-  const groups = [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof color'], ['door', 'Doors']];
+  const groups = [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof color'], ['door', 'Doors'], ['window', 'Windows']]
+    .filter(([k]) => colorGroupEnabled(state.catalog, k));
   const cs = state.catalog.colors;
   const choices = roofChoices(state.catalog, curStyle());
-  let html = `<h2>Roofing &amp; colors</h2><p class="sub">Tap an option — the 3D shed updates instantly.</p>`;
+  let html = `<h2>${choices.length > 1 ? 'Roofing &amp; colors' : 'Colors'}</h2><p class="sub">Tap an option — the 3D shed updates instantly.</p>`;
   if (choices.length > 1) {
     html += `<h3>Roofing</h3><div class="roofs">${choices.map(r => {
       const d = roofDelta(r);

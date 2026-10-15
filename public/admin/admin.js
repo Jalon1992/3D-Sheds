@@ -251,7 +251,9 @@ const STYLE_FIELDS = () => [
   { key: 'roof_type', label: 'Roof style', type: 'select', options: [['gable', 'Gable (A-frame)'], ['barn', 'Barn / gambrel'], ['lean_to', 'Lean-to (single slope)'], ['saltbox', 'Saltbox (offset gable)']] },
   { key: 'ridge_axis', label: 'Front wall', type: 'select', options: [['depth', 'Gable end faces front'], ['width', 'Eave (long side) faces front']] },
   { key: 'wall_height', label: 'Wall height (ft)', type: 'number', step: '0.25' },
-  { key: 'roof_pitch', label: 'Roof pitch (rise per 12")', type: 'number', step: '0.5' },
+  { key: 'roof_pitch', label: 'Roof pitch (rise per 12")', type: 'number', step: '0.25', help: 'e.g. 6 = 6/12. On gambrel roofs this is the upper slope.' },
+  { key: 'roof_pitch_lower', label: 'Gambrel lower pitch (rise per 12")', type: 'number', step: '0.25', ph: '18', help: 'Gambrel (barn) roofs only — the steep lower slope.' },
+  { key: 'gambrel_break', label: 'Gambrel break (%)', type: 'number', step: '1', ph: '42', help: 'Gambrel only. How far in the break sits, as % of half the shed span (higher = wider steep section).' },
   { key: 'siding_type', label: 'Siding', type: 'select', options: [['lap', 'Lap siding'], ['board_batten', 'Board & batten'], ['t111', 'T1-11 panel'], ['metal', 'Metal']] },
   { key: 'overhang', label: 'Eave overhang (ft)', type: 'number', step: '0.05', help: 'Along the low sides of the roof (where water runs off).' },
   { key: 'gable_overhang', label: 'Gable overhang (ft)', type: 'number', step: '0.05', help: 'At the gable/rake ends. Blank = same as eave.' },
@@ -327,7 +329,7 @@ function styleEditor(style) {
     body: `<div class="split"><div><form class="form" id="sf">${STYLE_FIELDS().map(f => field(f, s[f.key])).join('')}
       <div class="section-t">Sizes &amp; prices</div><div class="full" id="sizesBox">${sizesHTML()}</div>
       <div class="section-t">Standard options (already on the shed)</div><div class="full" id="stdBox">${stdHTML()}</div>
-      <div class="section-t">Default colors</div>${['siding', 'trim', 'roof', 'door'].map(colorSel).join('')}
+      <div class="section-t">Default colors</div>${['siding', 'trim', 'roof', 'door', 'window'].map(colorSel).join('')}
       </form></div><div><div class="preview3d" id="pv"><div class="pv-note">Live preview</div></div></div></div>`,
     foot: `<span></span><div class="row"><button class="btn ghost" data-cancel>Cancel</button><button class="btn primary" id="saveStyle">Save style</button></div>`,
     onMount: root => {
@@ -336,7 +338,7 @@ function styleEditor(style) {
         const d = readFields($('#sf', root), STYLE_FIELDS());
         d.standard_options = stds.map(x => ({ option_id: Number(x.option_id), wall: x.wall, offset: Number(x.offset) || 0,
           ...(Number(x.w) > 0 ? { w: Number(x.w) } : {}), ...(Number(x.h) > 0 ? { h: Number(x.h) } : {}) }));
-        d.default_colors = {}; for (const c of ['siding', 'trim', 'roof', 'door']) { const v = $(`[name=dc_${c}]`, root).value; if (v) d.default_colors[c] = Number(v); }
+        d.default_colors = {}; for (const c of ['siding', 'trim', 'roof', 'door', 'window']) { const v = $(`[name=dc_${c}]`, root).value; if (v) d.default_colors[c] = Number(v); }
         return d;
       };
       const preview = () => {
@@ -386,7 +388,7 @@ function styleEditor(style) {
 // ---------------------------------------------------------------------------
 const COLOR_FIELDS = [
   { key: 'name', label: 'Color name', required: true },
-  { key: 'category', label: 'Used for', type: 'select', options: [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof'], ['door', 'Doors']] },
+  { key: 'category', label: 'Used for', type: 'select', options: [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof'], ['door', 'Doors'], ['window', 'Windows']] },
   { key: 'hex', label: 'Color', type: 'color' },
   { key: 'material', label: 'Roof colors: offered for', type: 'select', options: () => [['', 'All roofing types'], ...roofing().map(r => [r.key, r.name + ' only'])], help: 'Only used for roof colors.' },
   { key: 'price', label: 'Upcharge ($)', type: 'number', step: '1', help: '0 = no extra charge' },
@@ -395,11 +397,12 @@ const COLOR_FIELDS = [
 ];
 async function colors() {
   await loadCatalog();
-  const groups = [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof'], ['door', 'Doors']];
+  const groups = [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof'], ['door', 'Doors'], ['window', 'Windows']];
   settings = await api('GET', '/api/admin/settings');
+  const cg = settings.color_groups || {};
   const R = roofing();
   const unitTxt = { per_roof_sqft: '/ sq ft of roof', per_sqft: '/ sq ft of floor', each: 'flat' };
-  $('#main').innerHTML = head('Roofing & colors', 'Tip: name a door color “Match Trim” and doors will automatically use the trim color.', `<button class="btn primary" id="addColor">+ New color</button>`) + `
+  $('#main').innerHTML = head('Roofing & colors', 'Tip: name a door or window color “Match Trim” and it automatically follows the trim color. Untick “Customers can choose” to hide a color group from customers.', `<button class="btn primary" id="addColor">+ New color</button>`) + `
     <div class="card" style="margin-bottom:16px"><div class="card-pad" style="padding-bottom:4px"><h2>Roofing materials</h2><p class="muted" style="margin:0">Customers pick these on the “Roof &amp; Colors” step. Each style's <b>standard roofing</b> is included; others charge the difference. Which ones each style offers is set in Styles &amp; sizes.</p></div>
     <table class="tbl"><tr><th>Key</th><th>Name shown to customers</th><th>Description</th><th class="num">Price</th><th>Priced</th><th>Active</th></tr>
     ${R.map((r, i) => `<tr><td class="mono">${esc(r.key)}</td><td><input class="in" data-rf="${i}" data-k="name" value="${esc(r.name)}"></td><td><input class="in" data-rf="${i}" data-k="description" value="${esc(r.description || '')}"></td>
@@ -407,9 +410,15 @@ async function colors() {
       <td><select class="in" data-rf="${i}" data-k="price_unit">${Object.entries(unitTxt).map(([k, l]) => `<option value="${k}" ${k === r.price_unit ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
       <td><input type="checkbox" data-rf="${i}" data-k="active" ${r.active !== false && r.active !== 0 ? 'checked' : ''}></td></tr>`).join('')}</table>
     <div class="card-pad" style="padding-top:10px"><button class="btn primary sm" id="saveRoofing">Save roofing</button></div></div>` +
-    groups.map(([k, l]) => `<div class="card" style="margin-bottom:16px"><div class="card-pad" style="padding-bottom:4px"><h2>${l}</h2></div><table class="tbl"><tr><th style="width:50px"></th><th>Name</th><th>Hex</th>${k === 'roof' ? '<th>Roofing</th>' : ''}<th class="num">Upcharge</th><th>Status</th><th></th></tr>
+    groups.map(([k, l]) => `<div class="card" style="margin-bottom:16px"><div class="card-pad row" style="padding-bottom:4px;justify-content:space-between"><h2>${l}</h2>
+      <label class="chk" title="When off, customers can't change this color and the style's default is used${k === 'door' || k === 'window' ? ' (Match Trim follows the trim color)' : ''}"><input type="checkbox" data-cg="${k}" ${cg[k] !== false ? 'checked' : ''}>Customers can choose</label></div><table class="tbl"><tr><th style="width:50px"></th><th>Name</th><th>Hex</th>${k === 'roof' ? '<th>Roofing</th>' : ''}<th class="num">Upcharge</th><th>Status</th><th></th></tr>
       ${catalog.colors.filter(c => c.category === k).map(c => `<tr><td><span class="sw" style="background:${esc(c.hex)}"></span></td><td><b>${esc(c.name)}</b></td>${k === 'roof' ? `<td>${esc(R.find(r => r.key === c.material)?.name || 'All')}</td>` : ''}<td class="mono">${esc(c.hex)}</td><td class="num">${c.price ? fmt(c.price) : '—'}</td><td><span class="pill ${c.active ? 'on' : 'off'}">${c.active ? 'Active' : 'Hidden'}</span></td>
       <td class="num"><button class="icon-btn" data-edit="${c.id}">${PENCIL}</button> <button class="icon-btn" data-del="${c.id}">${TRASH}</button></td></tr>`).join('') || '<tr><td colspan="6" class="muted">None yet</td></tr>'}</table></div>`).join('');
+  $$('[data-cg]').forEach(el => el.onchange = guard(async () => {
+    const next = { ...(settings.color_groups || {}), [el.dataset.cg]: el.checked };
+    await api('PUT', '/api/admin/settings', { color_groups: next }); settings.color_groups = next;
+    toast(`${groups.find(g => g[0] === el.dataset.cg)[1]} color choice turned ${el.checked ? 'on' : 'off'}`);
+  }));
   $('#saveRoofing').onclick = guard(async () => {
     const out = R.map(r => ({ ...r }));
     $$('[data-rf]').forEach(el => { const r = out[el.dataset.rf]; const k = el.dataset.k; r[k] = el.type === 'checkbox' ? el.checked : (k === 'price' ? Number(el.value) || 0 : el.value); });

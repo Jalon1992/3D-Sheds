@@ -177,6 +177,7 @@ function makeMaterials(style, colors) {
     roof: (u, v) => new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e'), map: tiled(roofTex, u, v), roughness: style.roof_material === 'metal' ? 0.4 : 0.95, metalness: style.roof_material === 'metal' ? 0.35 : 0 }),
     roofPlain: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e').multiplyScalar(0.85), roughness: 0.8 }),
     door: new THREE.MeshStandardMaterial({ color: c(colors.door, colors.trim || '#f4f4ef'), roughness: 0.6 }),
+    window: new THREE.MeshStandardMaterial({ color: c(colors.window, colors.trim || '#f4f4ef'), roughness: 0.55 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x9db6c4, roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.55 }),
     metal: new THREE.MeshStandardMaterial({ color: 0x2b2d2f, roughness: 0.35, metalness: 0.8 }),
     steel: new THREE.MeshStandardMaterial({ color: 0xbfc4c7, roughness: 0.3, metalness: 0.85 }),
@@ -243,7 +244,8 @@ function handle(g, x, y, z, M) {
   const k = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), M.steel); k.position.set(x, y, z); g.add(k);
   box(0.1, 0.3, 0.04, M.steel, x, y, z - 0.05, g);
 }
-function windowUnit(g, w, h, M, opts = {}) {
+function windowUnit(g, w, h, M0, opts = {}) {
+  const M = { ...M0, trim: M0.window || M0.trim }; // window frame, grids and casing use the window color
   const zOut = T / 2;
   casing(g, w, h, M, zOut, true);
   box(w, h, 0.03, M.glass, 0, h / 2, 0.02, g);
@@ -625,8 +627,9 @@ export class ShedScene {
     const size = style?.sizes.find(s => s.id === config.size_id);
     if (!style || !size) return;
     const colorById = Object.fromEntries(catalog.colors.map(c => [c.id, /match\s*trim/i.test(c.name) ? null : c.hex]));
-    const colors = {}; for (const k of ['siding', 'trim', 'roof', 'door']) colors[k] = colorById[config.colors?.[k]];
+    const colors = {}; for (const k of ['siding', 'trim', 'roof', 'door', 'window']) colors[k] = colorById[config.colors?.[k]];
     if (!colors.door) colors.door = colors.trim;
+    if (!colors.window) colors.window = colors.trim;
     const optById = Object.fromEntries(catalog.options.map(o => [o.id, o]));
     const firstBuild = !this.geo;
     const prevDims = this.geo && [this.geo.W, this.geo.D, this.geo.H, this.geo.peak].join();

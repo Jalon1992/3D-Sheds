@@ -46,7 +46,7 @@ Failed deliveries are retried after 1s, 5s and 25s.
           properties: {
             style_id: { type: 'integer' }, size_id: { type: 'integer' },
             roof_material: { type: 'string', example: 'metal', description: 'Roofing material key (e.g. shingle = Architectural Shingles, metal = Ag Panel Metal)' },
-            colors: { type: 'object', properties: { siding: { type: 'integer' }, trim: { type: 'integer' }, roof: { type: 'integer' }, door: { type: 'integer' } } },
+            colors: { type: 'object', properties: { siding: { type: 'integer' }, trim: { type: 'integer' }, roof: { type: 'integer' }, door: { type: 'integer' }, window: { type: 'integer' } } },
             items: {
               type: 'array', items: {
                 type: 'object', required: ['option_id'], properties: {
@@ -101,7 +101,7 @@ Failed deliveries are retried after 1s, 5s and 25s.
           type: 'object', properties: {
             id: { type: 'integer', readOnly: true }, name: { type: 'string' }, description: { type: 'string' }, image_url: { type: 'string' },
             roof_type: { type: 'string', enum: ['gable', 'barn', 'lean_to', 'saltbox'] }, ridge_axis: { type: 'string', enum: ['depth', 'width'] },
-            wall_height: { type: 'number' }, roof_pitch: { type: 'number', description: 'Rise per 12" of run' }, overhang: { type: 'number', description: 'Eave overhang (ft)' },
+            wall_height: { type: 'number' }, roof_pitch: { type: 'number', description: 'Rise per 12" of run (upper slope on gambrel roofs)' }, roof_pitch_lower: { type: 'number', description: 'Gambrel lower-slope pitch (rise per 12")' }, gambrel_break: { type: 'number', description: 'Gambrel break: lower slope run as % of half the span' }, overhang: { type: 'number', description: 'Eave overhang (ft)' },
             gable_overhang: { type: 'number', nullable: true, description: 'Gable/rake overhang (ft); null = same as eave' },
             fascia_size: { type: 'number', description: 'Fascia board height (inches, default 5.5)' }, rake_size: { type: 'number', description: 'Rake trim height (inches, default 5.5)' },
             corner_trim: { type: 'number', description: 'Corner board width (inches, default 5)' }, casing_trim: { type: 'number', description: 'Door/window trim width (inches, default 4)' },
@@ -112,7 +112,7 @@ Failed deliveries are retried after 1s, 5s and 25s.
           },
         },
         Size: { type: 'object', properties: { id: { type: 'integer', readOnly: true }, style_id: { type: 'integer' }, width: { type: 'number' }, depth: { type: 'number' }, price: { type: 'number' }, active: { type: 'integer' }, sort: { type: 'integer' } } },
-        Color: { type: 'object', properties: { id: { type: 'integer', readOnly: true }, name: { type: 'string' }, hex: { type: 'string' }, category: { type: 'string', enum: ['siding', 'trim', 'roof', 'door'] }, material: { type: 'string', nullable: true, description: 'Roof colors: which roofing material it is offered for (null = all)' }, price: { type: 'number' }, active: { type: 'integer' } } },
+        Color: { type: 'object', properties: { id: { type: 'integer', readOnly: true }, name: { type: 'string' }, hex: { type: 'string' }, category: { type: 'string', enum: ['siding', 'trim', 'roof', 'door', 'window'] }, material: { type: 'string', nullable: true, description: 'Roof colors: which roofing material it is offered for (null = all)' }, price: { type: 'number' }, active: { type: 'integer' } } },
         Option: {
           type: 'object', properties: {
             id: { type: 'integer', readOnly: true }, name: { type: 'string' }, description: { type: 'string' },

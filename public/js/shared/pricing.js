@@ -9,6 +9,13 @@ export const DEFAULT_ROOFING = [
   { key: 'shingle', name: 'Architectural Shingles', description: '30-year dimensional asphalt shingles.', price: 0, price_unit: 'per_roof_sqft', active: true },
   { key: 'metal', name: 'Ag Panel Metal', description: '29-ga ribbed steel panels, 40-year paint.', price: 0.85, price_unit: 'per_roof_sqft', active: true },
 ];
+/** Color groups customers can pick from (each can be switched off in Settings). */
+export const COLOR_GROUPS = [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof'], ['door', 'Doors'], ['window', 'Windows']];
+export function colorGroupEnabled(catalog, key) {
+  const g = catalog.settings?.color_groups;
+  return !(g && g[key] === false);
+}
+
 export function roofingList(catalog) {
   const r = catalog.settings?.roofing;
   return Array.isArray(r) && r.length ? r : DEFAULT_ROOFING;
@@ -80,6 +87,7 @@ export function defaultConfig(catalog, styleId, sizeId) {
       trim: d.trim || firstColor('trim'),
       roof: roofCols.find(c => c.id === d.roof)?.id || roofCols[0]?.id || d.roof || firstColor('roof'),
       door: d.door || firstColor('door'),
+      window: d.window || firstColor('window'),
     },
     items,
   };
@@ -174,8 +182,10 @@ export function sanitizeConfig(catalog, raw) {
   const choices = roofChoices(catalog, style);
   const roof_material = (choices.find(r => r.key === raw.roof_material) || choices.find(r => r.key === style.roof_material) || choices[0] || {}).key || null;
   const colors = {};
-  for (const k of ['siding', 'trim', 'roof', 'door']) {
+  const defaults = defaultConfig(catalog, style.id, size.id).colors;
+  for (const k of COLOR_GROUPS.map(g => g[0])) {
     const v = Number(raw.colors?.[k]);
+    if (!colorGroupEnabled(catalog, k)) { if (defaults[k]) colors[k] = defaults[k]; continue; }
     if (colorIds.has(v)) colors[k] = v;
   }
   const items = (Array.isArray(raw.items) ? raw.items : []).slice(0, 200)

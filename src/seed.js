@@ -27,6 +27,7 @@ export function seed() {
     });
   }
   if (getSettings().roofing === undefined) setSettings({ roofing: DEFAULT_ROOFING });
+  if (getSettings().color_groups === undefined) setSettings({ color_groups: { siding: true, trim: true, roof: true, door: true, window: true } });
   if (getSettings().downgrade_credit === undefined) setSettings({ downgrade_credit: true, remove_credit: true });
 
   if (get('SELECT id FROM styles LIMIT 1')) return;
@@ -49,6 +50,8 @@ export function seed() {
     ['roof', 'Galvalume', '#b9bec0', 0, 'metal'], ['roof', 'Black', '#1f2022', 0, 'metal'], ['roof', 'Charcoal Gray', '#45484b', 0, 'metal'],
     ['roof', 'Burnished Slate', '#4a3f35', 0, 'metal'], ['roof', 'Barn Red', '#7a2620', 0, 'metal'], ['roof', 'Forest Green', '#2f4a36', 0, 'metal'],
     ['roof', 'Ocean Blue', '#2c4a63', 0, 'metal'], ['roof', 'Polar White', '#eceeea', 0, 'metal'],
+    ['window', 'Match Trim', '#f4f4ef'], ['window', 'White', '#f6f6f2'], ['window', 'Black', '#1e1f20'],
+    ['window', 'Bronze', '#4a3b2c'], ['window', 'Almond', '#d9cdb4'],
     ['door', 'Match Trim', '#f4f4ef'], ['door', 'Black', '#1e1f20'], ['door', 'Barn Red', '#8c2d22'], ['door', 'Natural Wood', '#9a6a40', 95],
   ];
   colors.forEach(([category, name, hex, price, material], i) => { C[name + ':' + category] = ins('colors', { category, name, hex, price: price || 0, material: material || null, sort: i }); });
@@ -101,7 +104,7 @@ export function seed() {
   }, [[8, 8], [8, 10], [8, 12], [10, 12], [10, 14], [10, 16], [12, 16], [12, 20]], 34, 1400);
   style({
     name: 'Lofted Barn', description: 'Gambrel roof with extra headroom and a built-in loft.', roof_type: 'barn', ridge_axis: 'width',
-    wall_height: 7, roof_pitch: 6, overhang: 0.6, siding_type: 't111', roof_material: 'shingle', sort: 1,
+    wall_height: 7, roof_pitch: 5, roof_pitch_lower: 18, gambrel_break: 42, overhang: 0.6, siding_type: 't111', roof_material: 'shingle', sort: 1,
     default_colors: { siding: C['Barn Red:siding'], trim: C['White:trim'], roof: C['Weathered Wood:roof'], door: C['Match Trim:door'] },
     standard_options: [{ option_id: O.dbl4, wall: 'front', offset: 0 }, { option_id: O.win23, wall: 'front', offset: -3.6 }, { option_id: O.win23, wall: 'front', offset: 3.6 }, { option_id: O.loft, wall: 'left', offset: 0 }],
   }, [[12, 10], [14, 10], [16, 10], [12, 12], [16, 12], [20, 12], [24, 12]], 40, 1600);

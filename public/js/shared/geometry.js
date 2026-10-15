@@ -15,7 +15,11 @@ export function shedGeometry(style, size) {
   let profile;
   switch (style.roof_type) {
     case 'barn': {
-      const bs = 0.58 * s, r1 = (s - bs) * 1.45, r2 = bs * 0.42;
+      // Gambrel: steep lower slope (roof_pitch_lower), shallow upper slope (roof_pitch),
+      // break point at gambrel_break % of the half-span measured in from the wall.
+      const kl = (Number(style.roof_pitch_lower) || 18) / 12;
+      const f = Math.min(0.9, Math.max(0.1, (Number(style.gambrel_break) || 42) / 100));
+      const bs = s * (1 - f), r1 = (s - bs) * kl, r2 = bs * k;
       profile = [[-s, 0], [-bs, r1], [0, r1 + r2], [bs, r1], [s, 0]]; break;
     }
     case 'lean_to': profile = [[-s, 0], [s, S * k]]; break;

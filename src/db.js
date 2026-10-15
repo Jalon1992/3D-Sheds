@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS sizes (
 
 CREATE TABLE IF NOT EXISTS colors (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL, hex TEXT NOT NULL,
-  category TEXT NOT NULL,                    -- siding | trim | roof | door
+  category TEXT NOT NULL,                    -- siding | trim | roof | door | window
   material TEXT,                             -- roof colors only: shingle | metal | null (both)
   price REAL DEFAULT 0, active INTEGER DEFAULT 1, sort INTEGER DEFAULT 0);
 
@@ -86,6 +86,8 @@ for (const sql of [
   'ALTER TABLE styles ADD COLUMN rake_size REAL',
   'ALTER TABLE styles ADD COLUMN corner_trim REAL',
   'ALTER TABLE styles ADD COLUMN casing_trim REAL',
+  'ALTER TABLE styles ADD COLUMN roof_pitch_lower REAL',
+  'ALTER TABLE styles ADD COLUMN gambrel_break REAL',
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------
@@ -119,7 +121,7 @@ export function setSettings(obj) {
 // Settings that are safe to expose to the public configurator
 export const PUBLIC_SETTINGS = ['company_name', 'logo_url', 'brand_color', 'currency_symbol', 'tax_rate', 'tax_delivery',
   'delivery_fee', 'show_prices', 'success_message', 'consent_text', 'phone', 'website', 'privacy_url', 'require_phone',
-  'headline', 'thank_you_url', 'roofing', 'downgrade_credit', 'remove_credit'];
+  'headline', 'thank_you_url', 'roofing', 'downgrade_credit', 'remove_credit', 'color_groups'];
 
 // ---- Catalog (what the configurator needs) ----------------------------------
 export function getCatalog({ includeInactive = false } = {}) {

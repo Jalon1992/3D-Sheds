@@ -72,7 +72,7 @@ After deploying, set **Admin → Settings → Public URL** (e.g. `https://builde
 ## Managing the catalog
 
 ### Styles & sizes
-Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side faces front (gable end or long eave side), wall height, roof pitch, **eave overhang** and **gable overhang** (set separately), **siding** (lap, board & batten, T1-11, metal), the standard roofing and the roofing choices, and **trim sizes in inches** (fascia height, rake trim height, corner board width, door & window trim width). The editor shows a live 3D preview.
+Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side faces front (gable end or long eave side), wall height, **roof pitch** (on gambrel roofs: separate **lower and upper pitch** plus where the break sits), **eave overhang** and **gable overhang** (set separately), **siding** (lap, board & batten, T1-11, metal), the standard roofing and the roofing choices, and **trim sizes in inches** (fascia height, rake trim height, corner board width, door & window trim width). The editor shows a live 3D preview.
 
 - **Sizes:** width × depth with a base price each. Use *Fill prices* to set every size from a $/sq ft + base amount, then tweak.
 - **Standard options:** items already on the shed and included in the base price (e.g. a 36" door on the front). Pick the option, the wall and an offset in feet from the wall's centre (viewed from outside, + is right). Optional **width/height** columns resize a door or window for just that style; leave them blank to use the option's own size. Customers who swap a standard item pay only the difference.
@@ -82,7 +82,7 @@ Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side
 Admin → **Roofing & colors → Roofing materials**: rename, describe and price each roofing type: per sq ft of **roof surface** (calculated from pitch and overhangs), per sq ft of floor, or flat. On each style choose the **standard roofing** (included in the base price) and which roofing types customers can pick; picking a different one charges the difference. Each roof color can be limited to shingles or metal (e.g. Galvalume only shows for Ag Panel).
 
 ### Colors
-Siding, trim, roof and door colors, each with an optional upcharge. A door color named **“Match Trim”** automatically follows the trim color.
+Siding, trim, roof, door and **window** colors, each with an optional upcharge. A door or window color named **“Match Trim”** automatically follows the trim color. Each color group has a **“Customers can choose”** switch; turn it off and customers no longer see that choice (the style's default color is used, and the server enforces it).
 
 ### Options & 3D models
 Every option has a category, price, size and a **placement**:
