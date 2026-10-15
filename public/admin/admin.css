@@ -163,3 +163,6 @@ pre.snip { background: #0f1715; color: #d3eadf; padding: 14px; border-radius: 10
   .g4, .g3 { grid-template-columns: repeat(2, 1fr); } .g2, .split, .drawer, .form { grid-template-columns: 1fr; }
   .preview3d { position: relative; height: 300px; }
 }
+
+.roofinfo { background: var(--brand-soft); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: #1f4a36; }
+.roofinfo span { white-space: nowrap; }

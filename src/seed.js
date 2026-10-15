@@ -104,7 +104,7 @@ export function seed() {
   }, [[8, 8], [8, 10], [8, 12], [10, 12], [10, 14], [10, 16], [12, 16], [12, 20]], 34, 1400);
   style({
     name: 'Lofted Barn', description: 'Gambrel roof with extra headroom and a built-in loft.', roof_type: 'barn', ridge_axis: 'width',
-    wall_height: 7, roof_pitch: 5, roof_pitch_lower: 18, gambrel_break: 42, overhang: 0.6, siding_type: 'lp_smartside', roof_material: 'shingle', sort: 1,
+    wall_height: 7, roof_pitch: 5, roof_pitch_lower: 18, gambrel_lower_len: 3.25, overhang: 0.6, siding_type: 'lp_smartside', roof_material: 'shingle', sort: 1,
     default_colors: { siding: C['Barn Red:siding'], trim: C['White:trim'], roof: C['Weathered Wood:roof'], door: C['Match Trim:door'] },
     standard_options: [{ option_id: O.dbl4, wall: 'front', offset: 0 }, { option_id: O.win23, wall: 'front', offset: -3.6 }, { option_id: O.win23, wall: 'front', offset: 3.6 }, { option_id: O.loft, wall: 'left', offset: 0 }],
   }, [[12, 10], [14, 10], [16, 10], [12, 12], [16, 12], [20, 12], [24, 12]], 40, 1600);

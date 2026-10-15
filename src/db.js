@@ -91,6 +91,8 @@ for (const sql of [
   'ALTER TABLE styles ADD COLUMN metal_rake_size REAL',
   'ALTER TABLE styles ADD COLUMN metal_rake_leg REAL',
   `ALTER TABLE styles ADD COLUMN trim_type TEXT DEFAULT 'lp'`,
+  'ALTER TABLE styles ADD COLUMN gambrel_lower_len REAL',
+  'ALTER TABLE styles ADD COLUMN roof_pitch_back REAL',
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------

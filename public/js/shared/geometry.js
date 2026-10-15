@@ -17,13 +17,23 @@ export function shedGeometry(style, size) {
     case 'barn': {
       // Gambrel: steep lower slope (roof_pitch_lower), shallow upper slope (roof_pitch),
       // break point at gambrel_break % of the half-span measured in from the wall.
+      // Lower section size: gambrel_lower_len = length along the slope in ft (preferred),
+      // otherwise gambrel_break % of the half-span.
       const kl = (Number(style.roof_pitch_lower) || 18) / 12;
-      const f = Math.min(0.9, Math.max(0.1, (Number(style.gambrel_break) || 42) / 100));
-      const bs = s * (1 - f), r1 = (s - bs) * kl, r2 = bs * k;
+      let run;
+      if (Number(style.gambrel_lower_len) > 0) run = Number(style.gambrel_lower_len) / Math.hypot(1, kl);
+      else run = s * Math.min(0.9, Math.max(0.1, (Number(style.gambrel_break) || 42) / 100));
+      run = Math.min(run, s * 0.9);
+      const bs = s - run, r1 = run * kl, r2 = bs * k;
       profile = [[-s, 0], [-bs, r1], [0, r1 + r2], [bs, r1], [s, 0]]; break;
     }
     case 'lean_to': profile = [[-s, 0], [s, S * k]]; break;
-    case 'saltbox': profile = [[-s, 0], [0.3 * s, 1.3 * s * k], [s, 0]]; break;
+    case 'saltbox': {
+      // Long (shallow) slope = roof_pitch, short (steep) slope = roof_pitch_back; the ridge sits where they meet.
+      const kb = (Number(style.roof_pitch_back) || (k * 12 * 1.86)) / 12;
+      const x = s * (kb - k) / (k + kb); // ridge position (front is -s side)
+      profile = [[-s, 0], [x, k * (x + s)], [s, 0]]; break;
+    }
     default: profile = [[-s, 0], [0, s * k], [s, 0]];
   }
   const prof = u => {
@@ -50,6 +60,17 @@ export function shedGeometry(style, size) {
   const eaveOv = Number(style.overhang ?? 0.75) || 0;
   const gableOv = style.gable_overhang == null || style.gable_overhang === '' ? eaveOv : Number(style.gable_overhang) || 0;
   return { W, D, H, S, L, s, k, ridgeAlongZ, profile, prof, isGable, topAt, profileUs, peak, eaveOv, gableOv, wallLen: w => wallLength(w, size) };
+}
+
+/** Each roof section: pitch (x/12), length along the slope and horizontal run, in ft (no overhang). */
+export function roofSections(geo) {
+  const out = [];
+  for (let i = 0; i < geo.profile.length - 1; i++) {
+    const [u0, h0] = geo.profile[i], [u1, h1] = geo.profile[i + 1];
+    const run = Math.abs(u1 - u0), rise = Math.abs(h1 - h0);
+    out.push({ pitch: run ? (rise / run) * 12 : 0, length: Math.hypot(run, rise), run, rise });
+  }
+  return out;
 }
 
 /** Sloped roof surface area in sq ft, including eave and gable overhangs. */

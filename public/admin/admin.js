@@ -1,6 +1,7 @@
 // Admin dashboard (vanilla JS SPA).
 import { ShedScene, BUILTIN_KINDS } from '../js/shed3d.js';
 import { defaultConfig, money, WALLS, DEFAULT_ROOFING } from '../js/shared/pricing.js';
+import { shedGeometry, roofSections } from '../js/shared/geometry.js';
 const roofing = () => (Array.isArray(settings.roofing) && settings.roofing.length ? settings.roofing : DEFAULT_ROOFING);
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -52,6 +53,7 @@ function field(f, v) {
   const val = v ?? f.default ?? '';
   switch (f.type) {
     case 'section': return `<div class="section-t">${esc(f.label)}</div>`;
+    case 'html': return f.html;
     case 'checkbox': return `<label class="fld${full}"><span>&nbsp;</span><label class="chk"><input type="checkbox" name="${f.key}" ${val === true || val === 1 || val === '1' ? 'checked' : ''}>${esc(f.label)}</label>${help}</label>`;
     case 'multi': { const sel = Array.isArray(val) && val.length ? val : f.options.map(o => o[0]);
       return `<div class="fld${full}"><span>${esc(f.label)}</span><div class="row">${f.options.map(([k, l]) => `<label class="chk"><input type="checkbox" data-multi="${f.key}" value="${esc(k)}" ${sel.includes(k) ? 'checked' : ''}>${esc(l)}</label>`).join('')}</div>${help}</div>`; }
@@ -264,9 +266,14 @@ const STYLE_FIELDS = () => [
   { key: 'roof_type', label: 'Roof style', type: 'select', options: [['gable', 'Gable (A-frame)'], ['barn', 'Barn / gambrel'], ['lean_to', 'Lean-to (single slope)'], ['saltbox', 'Saltbox (offset gable)']] },
   { key: 'ridge_axis', label: 'Front wall', type: 'select', options: [['depth', 'Gable end faces front'], ['width', 'Eave (long side) faces front']] },
   { key: 'wall_height', label: 'Wall height (ft)', type: 'number', step: '0.25' },
-  { key: 'roof_pitch', label: 'Roof pitch (rise per 12")', type: 'number', step: '0.25', help: 'e.g. 6 = 6/12. On gambrel roofs this is the upper slope.' },
-  { key: 'roof_pitch_lower', label: 'Gambrel lower pitch (rise per 12")', type: 'number', step: '0.25', ph: '18', help: 'Gambrel (barn) roofs only — the steep lower slope.' },
-  { key: 'gambrel_break', label: 'Gambrel break (%)', type: 'number', step: '1', ph: '42', help: 'Gambrel only. How far in the break sits, as % of half the shed span (higher = wider steep section).' },
+  { type: 'section', label: 'Roof pitches & section lengths' },
+  { key: 'roof_pitch', label: 'Roof pitch (rise per 12")', type: 'number', step: '0.25', help: 'e.g. 6 = 6/12. Gambrel: the UPPER section. Saltbox: the long slope.' },
+  { key: 'roof_pitch_lower', label: 'Gambrel lower pitch (rise per 12")', type: 'number', step: '0.25', ph: '18', help: 'Gambrel (barn) only — the steep lower section.' },
+  { key: 'gambrel_lower_len', label: 'Gambrel lower section length (ft)', type: 'number', step: '0.0625', ph: '3.25', help: 'Measured along the slope, wall to break. The upper section fills the rest.' },
+  { key: 'gambrel_break', label: 'Or: gambrel break (%)', type: 'number', step: '1', ph: '42', help: 'Only used if the length above is blank: break position as % of half the span.' },
+  { key: 'roof_pitch_back', label: 'Saltbox short-slope pitch (rise per 12")', type: 'number', step: '0.25', help: 'Saltbox only — the short, steeper slope. The ridge sits where the two slopes meet.' },
+  { type: 'html', html: '<div class="full roofinfo" id="roofInfo"></div>' },
+  { type: 'section', label: 'Overhangs & siding' },
   { key: 'siding_type', label: 'Siding', type: 'select', options: [['lp_smartside', 'LP SmartSide panel – 8" o.c. grooves'], ['lap', 'Lap siding'], ['board_batten', 'Board & batten'], ['t111', 'T1-11 panel (smooth)'], ['metal', 'Metal']] },
   { key: 'trim_type', label: 'Wood trim', type: 'select', options: [['lp', 'LP SmartSide trim (cedar texture)'], ['smooth', 'Smooth trim']], help: 'Corner boards, fascia, door & window trim. Metal trim is always smooth.' },
   { key: 'overhang', label: 'Eave overhang (ft)', type: 'number', step: '0.05', help: 'Along the low sides of the roof (where water runs off).' },
@@ -367,6 +374,14 @@ function styleEditor(style) {
           const cat = { ...catalog, settings: { ...catalog.settings, roofing: roofing() }, styles: [st] };
           const cfg = defaultConfig(cat, -1, -1); cfg.roof_material = d.roof_material;
           modalScene.build(cat, cfg);
+          // live readout of each roof section at the previewed size
+          const secs = roofSections(shedGeometry(st, st.sizes[0]));
+          const ftin = v => { const t = Math.round(v * 12 * 4) / 4, f = Math.floor(t / 12), i = t - f * 12; return `${f}' ${i}"`; };
+          const names = secs.length === 4 ? ['Lower', 'Upper', 'Upper', 'Lower'] : secs.length === 2 ? (d.roof_type === 'saltbox' ? ['Long slope', 'Short slope'] : ['Each side', 'Each side']) : ['Roof'];
+          const seen = new Set();
+          $('#roofInfo', root).innerHTML = `<b>Roof sections at ${sz.width}' × ${sz.depth}'</b> (along the slope, without overhang): ` +
+            secs.map((x, i) => ({ x, n: names[i] })).filter(r => !seen.has(r.n) && seen.add(r.n))
+              .map(r => `<span>${r.n}: <b>${Math.round(r.x.pitch * 4) / 4}/12</b>, ${ftin(r.x.length)} long</span>`).join(' · ');
         } catch (e) { console.warn(e); }
       };
       let t; const later = () => { clearTimeout(t); t = setTimeout(preview, 200); };

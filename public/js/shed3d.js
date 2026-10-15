@@ -45,10 +45,10 @@ function cedarGrain(g, n, seedStart, strength, vertical = true) {
   }
 }
 const lpPanel = bump => canvasTex(bump ? 'lp-panel-bump' : 'lp-panel', 1024, (g, n) => {
-  g.fillStyle = bump ? '#9a9a9a' : '#ececec'; g.fillRect(0, 0, n, n);
-  cedarGrain(g, n, 11, bump ? 3.2 : 1.1, true);
-  // tiny pores of the embossed cedar texture
-  if (!bump) noise(g, n, n, n, 0.035);
+  g.fillStyle = bump ? '#9a9a9a' : '#ededed'; g.fillRect(0, 0, n, n);
+  // Painted finish: the cedar emboss shows only as light relief (bump map), never as colour streaks.
+  if (bump) cedarGrain(g, n, 11, 1.4, true);
+  else noise(g, n, n, n, 0.008);
   const step = n / 6; // 6 grooves per 4 ft = 8" o.c.
   for (let i = 0; i < 6; i++) {
     const x = i * step;
@@ -62,9 +62,8 @@ const lpPanel = bump => canvasTex(bump ? 'lp-panel-bump' : 'lp-panel', 1024, (g,
 // Trim: short cedar flecks in both directions so grain reads on every face of a board.
 const lpTrim = bump => canvasTex(bump ? 'lp-trim-bump' : 'lp-trim', 256, (g, n) => {
   g.fillStyle = bump ? '#9a9a9a' : '#eeeeee'; g.fillRect(0, 0, n, n);
-  cedarGrain(g, n, 23, bump ? 2.0 : 0.38, true);
-  cedarGrain(g, n, 37, bump ? 1.0 : 0.18, false);
-  if (!bump) noise(g, n, n, n, 0.015);
+  if (bump) { cedarGrain(g, n, 23, 1.6, true); cedarGrain(g, n, 37, 0.8, false); }
+  else noise(g, n, n, n, 0.008);
 }, 1);
 
 const SIDING = {
@@ -211,13 +210,13 @@ function makeMaterials(style, colors) {
   siding.map.repeat.set(1 / sidingTex.userData.tileFt, 1 / sidingTex.userData.tileFt);
   if (sidingType === 'lp_smartside') {
     const b = lpPanel(true); b.colorSpace = THREE.NoColorSpace; b.repeat.set(1 / 4, 1 / 4);
-    siding.bumpMap = b; siding.bumpScale = 1.6;
+    siding.bumpMap = b; siding.bumpScale = 1.1;
   }
   // Wood trim: LP SmartSide trim (embossed cedar) unless the style asks for smooth trim. Metal trim stays smooth.
   const trim = new THREE.MeshStandardMaterial({ color: c(colors.trim, '#f4f4ef'), roughness: 0.78 });
   if ((style.trim_type || 'lp') === 'lp') {
     const tb = lpTrim(true); tb.colorSpace = THREE.NoColorSpace;
-    trim.map = lpTrim(false); trim.bumpMap = tb; trim.bumpScale = 0.7;
+    trim.map = lpTrim(false); trim.bumpMap = tb; trim.bumpScale = 0.5;
   }
   const roofTex = style.roof_material === 'metal' ? metalRoofTex() : shingleTex();
   return {
