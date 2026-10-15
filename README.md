@@ -72,7 +72,7 @@ After deploying, set **Admin → Settings → Public URL** (e.g. `https://builde
 ## Managing the catalog
 
 ### Styles & sizes
-Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side faces front (gable end or long eave side), wall height, roof pitch, **eave overhang** and **gable overhang** (set separately), **siding** (lap, board & batten, T1-11, metal), the standard roofing and the roofing choices. The editor shows a live 3D preview.
+Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side faces front (gable end or long eave side), wall height, roof pitch, **eave overhang** and **gable overhang** (set separately), **siding** (lap, board & batten, T1-11, metal), the standard roofing and the roofing choices, and **trim sizes in inches** (fascia height, rake trim height, corner board width, door & window trim width). The editor shows a live 3D preview.
 
 - **Sizes:** width × depth with a base price each. Use *Fill prices* to set every size from a $/sq ft + base amount, then tweak.
 - **Standard options:** items already on the shed and included in the base price (e.g. a 36" door on the front). Pick the option, the wall and an offset in feet from the wall's centre (viewed from outside, + is right). Optional **width/height** columns resize a door or window for just that style; leave them blank to use the option's own size. Customers who swap a standard item pay only the difference.

@@ -82,6 +82,10 @@ for (const sql of [
   'ALTER TABLE styles ADD COLUMN gable_overhang REAL',
   `ALTER TABLE styles ADD COLUMN roof_choices TEXT DEFAULT '["shingle","metal"]'`,
   'ALTER TABLE colors ADD COLUMN material TEXT',
+  'ALTER TABLE styles ADD COLUMN fascia_size REAL',
+  'ALTER TABLE styles ADD COLUMN rake_size REAL',
+  'ALTER TABLE styles ADD COLUMN corner_trim REAL',
+  'ALTER TABLE styles ADD COLUMN casing_trim REAL',
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------

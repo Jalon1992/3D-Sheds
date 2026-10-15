@@ -212,7 +212,7 @@ function rbox(w, h, d, r, mat, x, y, z, parent) {
 // z = outward. For "opening" kinds, z = 0 is the CENTRE of the wall (exterior face at +T/2).
 // ---------------------------------------------------------------------------
 function casing(g, w, h, M, zOut, withSill) {
-  const cw = 0.33, ct = 0.06;
+  const cw = M.cw ?? 0.33, ct = 0.06;
   box(cw, h + cw, ct, M.trim, -w / 2 - cw / 2, (h + cw) / 2, zOut + ct / 2, g);
   box(cw, h + cw, ct, M.trim, w / 2 + cw / 2, (h + cw) / 2, zOut + ct / 2, g);
   box(w + cw * 2 + 0.1, cw, ct + 0.02, M.trim, 0, h + cw / 2, zOut + ct / 2, g);
@@ -326,7 +326,7 @@ function buildKind(kind, w, h, d, M, ctx = {}) {
     case 'window_shutters': {
       windowUnit(g, w, h, M, { cols: 2, rows: 2 });
       for (const sx of [-1, 1]) {
-        const sw = w * 0.5, x = sx * (w / 2 + 0.33 + sw / 2 + 0.02);
+        const sw = w * 0.5, x = sx * (w / 2 + (M.cw ?? 0.33) + sw / 2 + 0.02);
         box(sw, h + 0.2, 0.08, M.door, x, h / 2, zOut + 0.05, g);
         for (let i = 1; i < 9; i++) { const l = box(sw - 0.16, 0.05, 0.04, M.dark, x, (h + 0.2) * i / 9 - 0.1, zOut + 0.1, g); l.material = M.door; l.rotation.x = -0.4; }
         box(sw - 0.1, 0.03, 0.05, M.dark, x, h / 2, zOut + 0.1, g);
@@ -641,6 +641,7 @@ export class ShedScene {
 
     const geo = this.geo = shedGeometry(style, size);
     const M = this.M = makeMaterials({ ...style, roof_material: config.roof_material || style.roof_material }, colors);
+    M.cw = (style.casing_trim === null || style.casing_trim === undefined || style.casing_trim === '' ? 4 : Number(style.casing_trim)) / 12;
     const { W, D, H } = geo;
     const y0 = FLOOR_Y;
     const shed = new THREE.Group(); this.root.add(shed);
@@ -694,10 +695,14 @@ export class ShedScene {
       inner.material = M.osb.clone(); inner.material.map = tiled(osbTex(), 1, 1); inner.material.map.repeat.set(0.25, 0.25);
     }
 
+    // --- Trim sizes (inches, set per style in the admin)
+    const inch = (v, d) => (v === null || v === undefined || v === '' ? d : Number(v)) / 12;
+    const fasciaH = inch(style.fascia_size, 5.5), rakeH = inch(style.rake_size, 5.5), cornerW = inch(style.corner_trim, 5);
+
     // --- Corner boards
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       const h = geo.H + geo.prof(geo.ridgeAlongZ ? sx * geo.s : sz * geo.s);
-      box(0.42, h, 0.42, M.trim, sx * (W / 2 - 0.12 + 0.02), y0 + h / 2, sz * (D / 2 - 0.12 + 0.02), shed).userData.solid = true;
+      box(cornerW, h, cornerW, M.trim, sx * (W / 2 + 0.06 - cornerW / 2), y0 + h / 2, sz * (D / 2 + 0.06 - cornerW / 2), shed).userData.solid = true;
     }
 
     // --- Roof
@@ -706,6 +711,8 @@ export class ShedScene {
     const ov = geo.eaveOv, th = 0.22;
     const ridgeLen = geo.L + 2 * geo.gableOv, RL = ridgeLen / 2;
     const metalRoof = M.roofTex.userData.tileFt === 3;
+    const rt = 0.07;                                   // rake / fascia board thickness
+    const capW = metalRoof ? 0.6 : 0.45, ct = metalRoof ? 0.05 : 0.09;
     // Bottom (underside) profile, with the eave overhang added to the first/last segment
     const prof = geo.profile.map(p => p.slice());
     const nSeg = prof.length - 1;
@@ -713,49 +720,87 @@ export class ShedScene {
     { const [ux, uy] = dirOf(prof[0], prof[1]), k = ov / Math.max(ux, 0.3); prof[0] = [prof[0][0] - ux * k, prof[0][1] - uy * k]; }
     { const [ux, uy] = dirOf(prof[nSeg - 1], prof[nSeg]), k = ov / Math.max(ux, 0.3); prof[nSeg] = [prof[nSeg][0] + ux * k, prof[nSeg][1] + uy * k]; }
     const normal = i => { const [ux, uy] = dirOf(prof[i], prof[i + 1]); return [-uy, ux]; };
-    // Top surface points: each slope offset by the roof thickness, mitred where two slopes meet
-    const top = prof.map((p, i) => {
-      if (i === 0 || i === nSeg) { const n = normal(i === 0 ? 0 : nSeg - 1); return [p[0] + n[0] * th, p[1] + n[1] * th]; }
+    // The profile offset outward by d, mitred where two slopes meet
+    const offLine = d => prof.map((p, i) => {
+      if (i === 0 || i === nSeg) { const n = normal(i === 0 ? 0 : nSeg - 1); return [p[0] + n[0] * d, p[1] + n[1] * d]; }
       const n1 = normal(i - 1), n2 = normal(i), bis = [n1[0] + n2[0], n1[1] + n2[1]];
       const cos = (n1[0] * bis[0] + n1[1] * bis[1]) / Math.hypot(...bis);
-      const k = th / cos / Math.hypot(...bis);
+      const k = d / cos / Math.hypot(...bis);
       return [p[0] + bis[0] * k, p[1] + bis[1] * k];
     });
+    const top = offLine(th);
+    let peakIdx = 0; prof.forEach((p, i) => { if (p[1] > prof[peakIdx][1]) peakIdx = i; });
+    const V2 = p => new THREE.Vector2(p[0], p[1]);
+    const strip = (outer, inner) => new THREE.Shape([...outer.map(V2), ...inner.slice().reverse().map(V2)]);
+
+    // Gambrel transitions: the upper roof laps OVER the transition trim (like real installs)
+    const lapAt = {}; // segment index → which end (0|1) is lapped
+    for (let i = 1; i < nSeg; i++) if (i !== peakIdx) { const upper = i < peakIdx ? i : i - 1; lapAt[upper] = i < peakIdx ? 0 : 1; }
+
     for (let i = 0; i < nSeg; i++) {
-      const B0 = prof[i], B1 = prof[i + 1], T0 = top[i], T1 = top[i + 1];
+      const B0 = prof[i], B1 = prof[i + 1];
+      let T0 = top[i], T1 = top[i + 1];
       // solid slab (trim colour on edges/underside) – top sunk a hair below the textured skin
       const n = normal(i), e = 0.006;
-      const shape = new THREE.Shape([new THREE.Vector2(B0[0], B0[1]), new THREE.Vector2(B1[0], B1[1]),
-        new THREE.Vector2(T1[0] - n[0] * e, T1[1] - n[1] * e), new THREE.Vector2(T0[0] - n[0] * e, T0[1] - n[1] * e)]);
+      const shape = new THREE.Shape([V2(B0), V2(B1), V2([T1[0] - n[0] * e, T1[1] - n[1] * e]), V2([T0[0] - n[0] * e, T0[1] - n[1] * e])]);
       const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: ridgeLen, bevelEnabled: false }), M.trim);
       slab.position.z = -RL; slab.castShadow = slab.receiveShadow = true; slab.userData.solid = true; roofG.add(slab);
+      if (lapAt[i] !== undefined) {
+        // lift the lapped end over the trim and run it a couple of inches past the bend
+        const lift = ct + 0.012, lap = 0.18;
+        const [ux, uy] = dirOf(T0, T1);
+        if (lapAt[i] === 0) T0 = [T0[0] - ux * lap + n[0] * lift, T0[1] - uy * lap + n[1] * lift];
+        else T1 = [T1[0] + ux * lap + n[0] * lift, T1[1] + uy * lap + n[1] * lift];
+      }
       // textured roof skin (u runs down/up the slope, v along the ridge)
       const len = Math.hypot(T1[0] - T0[0], T1[1] - T0[1]);
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute([T0[0], T0[1], -RL, T1[0], T1[1], -RL, T1[0], T1[1], RL, T0[0], T0[1], RL], 3));
       g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
       g.setIndex([0, 2, 1, 0, 3, 2]); g.computeVertexNormals();
-      const skin = new THREE.Mesh(g, M.roof(len, ridgeLen)); skin.castShadow = skin.receiveShadow = true; skin.userData.solid = true; roofG.add(skin);
+      const rm = M.roof(len, ridgeLen); rm.side = THREE.DoubleSide;
+      const skin = new THREE.Mesh(g, rm); skin.castShadow = skin.receiveShadow = true; skin.userData.solid = true; roofG.add(skin);
     }
-    // Ridge cap and gambrel transition caps: bent over the joint, one leaf down each slope
+    const leafOn = (P, towards, segIdx, len) => {
+      const d = [towards[0] - P[0], towards[1] - P[1]], l = Math.hypot(...d), ux = d[0] / l, uy = d[1] / l, n = normal(segIdx);
+      const leaf = box(len, ct, ridgeLen - 0.01, M.roofPlain, P[0] + ux * len / 2 + n[0] * ct / 2, P[1] + uy * len / 2 + n[1] * ct / 2, 0, roofG);
+      leaf.rotation.z = Math.atan2(uy, ux); leaf.userData.solid = true;
+    };
     for (let i = 1; i < nSeg; i++) {
-      const P = top[i], capW = metalRoof ? 0.6 : 0.45, ct = metalRoof ? 0.05 : 0.09;
-      for (const [a, b] of [[i, i - 1], [i, i + 1]]) {
-        const d = [top[b][0] - P[0], top[b][1] - P[1]], l = Math.hypot(...d), ux = d[0] / l, uy = d[1] / l;
-        const segIdx = Math.min(a, b), n = normal(segIdx);
-        const leaf = box(capW, ct, ridgeLen + 0.04, M.roofPlain,
-          P[0] + ux * capW / 2 + n[0] * ct / 2, P[1] + uy * capW / 2 + n[1] * ct / 2, 0, roofG);
-        leaf.rotation.z = Math.atan2(uy, ux); leaf.userData.solid = true;
+      const P = top[i];
+      if (i === peakIdx) {
+        // Ridge cap: bent over the peak, one leaf down each slope, wedge fills the bend
+        leafOn(P, top[i - 1], i - 1, capW); leafOn(P, top[i + 1], i, capW);
+        const n1 = normal(i - 1), n2 = normal(i);
+        const wedge = new THREE.Shape([V2(P), V2([P[0] + n2[0] * ct, P[1] + n2[1] * ct]), V2([P[0] + n1[0] * ct, P[1] + n1[1] * ct])]);
+        const wm2 = new THREE.Mesh(new THREE.ExtrudeGeometry(wedge, { depth: ridgeLen - 0.01, bevelEnabled: false }), M.roofPlain);
+        wm2.position.z = -RL + 0.005; wm2.castShadow = true; wm2.userData.solid = true; roofG.add(wm2);
+      } else {
+        // Transition trim: lies on the LOWER slope; the upper roofing laps over it
+        const lower = i < peakIdx ? i - 1 : i;
+        leafOn(P, i < peakIdx ? top[i - 1] : top[i + 1], lower, capW);
       }
-      // fill the small wedge on top of the joint so the bend looks continuous
-      const n1 = normal(i - 1), n2 = normal(i);
-      const q1 = [P[0] + n1[0] * ct, P[1] + n1[1] * ct], q2 = [P[0] + n2[0] * ct, P[1] + n2[1] * ct];
-      const wedge = new THREE.Shape([new THREE.Vector2(P[0], P[1]), new THREE.Vector2(q2[0], q2[1]), new THREE.Vector2(q1[0], q1[1])]);
-      const wm2 = new THREE.Mesh(new THREE.ExtrudeGeometry(wedge, { depth: ridgeLen + 0.04, bevelEnabled: false }), M.roofPlain);
-      wm2.position.z = -RL - 0.02; wm2.castShadow = true; wm2.userData.solid = true; roofG.add(wm2);
     }
-    // fascia along eaves
-    // (box sides already render in trim colour)
+
+    // Rake trim along both gable ends (L-shaped metal trim on metal roofs, rake board on shingles)
+    const rakeTop = offLine(th + (metalRoof ? ct + 0.04 : ct + 0.02)), rakeBot = offLine(th - rakeH);
+    for (const zs of [1, -1]) {
+      const face = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, rakeBot), { depth: rt, bevelEnabled: false }), M.trim);
+      face.position.z = zs > 0 ? RL : -RL - rt; face.castShadow = true; face.userData.solid = true; roofG.add(face);
+      if (metalRoof) {
+        const legW = 0.28; // leg that laps onto the roof panels
+        const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, offLine(th + 0.004)), { depth: legW, bevelEnabled: false }), M.trim);
+        leg.position.z = zs > 0 ? RL - legW : -RL; leg.castShadow = true; leg.userData.solid = true; roofG.add(leg);
+      }
+    }
+    // Fascia boards along the eaves
+    for (const end of [0, nSeg]) {
+      const T = top[end], B = prof[end], left = end === 0;
+      const xo = left ? Math.min(T[0], B[0]) : Math.max(T[0], B[0]);
+      const yt = Math.max(T[1], B[1]) + (metalRoof ? 0.035 : 0.02);
+      const f = box(rt, fasciaH, ridgeLen + 2 * rt, M.trim, xo + (left ? -rt / 2 : rt / 2), yt - fasciaH / 2, 0, roofG);
+      f.userData.solid = true;
+    }
 
     // --- Items
     for (const { it, o } of placed) {
