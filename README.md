@@ -121,6 +121,26 @@ Admin → **Price tiers & dealers**.
 - **ZIP codes:** assign tiers to exact ZIPs (`38301`), ranges (`38300-38399`) or prefixes (`383`). Add them one by one, paste a list (`ZIP,tier`), or upload a CSV. Exact beats range, range beats prefix; unlisted ZIPs use the **default tier**. Customers enter their ZIP at the top of the builder (or in the quote form).
 - Prices are always recalculated on the server for the chosen lot/ZIP. Each quote stores the **dealer lot** and **price tier**; both appear in the admin, CSV export, webhooks (`dealer`, `pricing.tier`) and GoHighLevel (a `dealer: Lot name` tag, the note, and flat fields `dealer_name` / `price_tier`). The quotes API can filter by `?dealer=lot1`.
 
+## Team roles & drawing packages
+
+Admin → **Account & users** → add team members with a role:
+
+| Role | Can do |
+|---|---|
+| **Admin** | Everything |
+| **Sales** | View quotes, change status & notes, download drawings |
+| **Production** | View quotes (read-only) and download drawings |
+
+Sales and Production users can be limited to **one dealer lot** — they then only see that lot's quotes (enforced by the server).
+
+**Drawings (PDF)** — on any quote (list or detail) click **Drawings PDF** to get one file with:
+1. 3D view & specifications (size, roofing, colors, dealer lot, delivery address, every option and its wall)
+2. Floor plan (to scale)
+3. Front & back elevations
+4. Left & right elevations
+
+Elevations are drawn to scale from the same geometry as the 3D model: siding, trim, roof profile and overhangs, every door/window/vent with its size, wall height and overall height.
+
 ## GoHighLevel
 
 Admin → **Integrations & API → GoHighLevel**. Use either option, or both.

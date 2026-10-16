@@ -41,7 +41,7 @@ function readSession(req) {
   if (!uid || !exp || !sig || Number(exp) < Date.now()) return null;
   const expect = crypto.createHmac('sha256', secret()).update(`${uid}.${exp}`).digest('base64url');
   if (sig.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
-  return get('SELECT id, email, name FROM users WHERE id = ?', Number(uid)) || null;
+  return get("SELECT id, email, name, COALESCE(role, 'admin') AS role, dealer_id FROM users WHERE id = ?", Number(uid)) || null;
 }
 
 // ---- API keys ----------------------------------------------------------------
@@ -62,10 +62,25 @@ function readApiKey(req) {
   return row || null;
 }
 
+/** Roles: admin (everything), sales (quotes: view + update status/notes, drawings),
+ *  production (quotes: view + drawings only). sales/production can be limited to one dealer lot. */
+export const ROLES = ['admin', 'sales', 'production'];
+const QUOTE_READ = /^\/quotes(\/\d+(\/floorplan\.svg)?)?$/;
+function roleAllows(user, method, path) {
+  if (user.role === 'admin') return true;
+  if (method === 'GET' && QUOTE_READ.test(path)) return true;
+  if (user.role === 'sales' && method === 'PATCH' && /^\/quotes\/\d+$/.test(path)) return true;
+  return false;
+}
+
 /** Admin UI session OR a valid API key. */
 export function requireAuth(req, res, next) {
   const user = readSession(req);
-  if (user) { req.user = user; return next(); }
+  if (user) {
+    req.user = user;
+    if (!roleAllows(user, req.method, req.path)) return res.status(403).json({ error: 'Your account does not have access to this.' });
+    return next();
+  }
   const key = readApiKey(req);
   if (key) { req.apiKey = key; return next(); }
   res.status(401).json({ error: 'Unauthorized. Log in or send an API key in the X-API-Key header.' });

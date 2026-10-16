@@ -97,6 +97,8 @@ for (const sql of [
   'ALTER TABLE styles ADD COLUMN rake_cap_size REAL',
   'ALTER TABLE styles ADD COLUMN drip_edge_size REAL',
   `ALTER TABLE styles ADD COLUMN drip_edge_color TEXT DEFAULT 'roof'`,
+  `ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'admin'`,
+  'ALTER TABLE users ADD COLUMN dealer_id TEXT',
   'ALTER TABLE quotes ADD COLUMN dealer_id TEXT',
   'ALTER TABLE quotes ADD COLUMN dealer_name TEXT',
   'ALTER TABLE quotes ADD COLUMN price_tier TEXT',

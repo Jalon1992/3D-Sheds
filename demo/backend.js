@@ -25,7 +25,11 @@ function fresh() {
   const d = {
     styles: c.styles, sizes, colors: c.colors, options: c.options, settings: structuredClone(seed.settings),
     quotes: [], webhooks: [], api_keys: [], log: [],
-    users: [{ id: 1, email: 'demo@example.com', name: 'Demo Admin', created_at: now() }],
+    users: [
+      { id: 1, email: 'demo@example.com', name: 'Demo Admin', role: 'admin', created_at: now() },
+      { id: 2, email: 'shop@example.com', name: 'Sample Production Crew', role: 'production', created_at: now() },
+      { id: 3, email: 'sales@example.com', name: 'Sample Sales (Highway 45 lot)', role: 'sales', dealer_id: 'lot2', created_at: now() },
+    ],
     seq: 1000,
   };
   db = d; sampleQuotes(); return d;
@@ -84,7 +88,9 @@ const on = (method, re, fn) => routes.push([method, re, fn]);
 const TABLES = ['styles', 'sizes', 'colors', 'options', 'webhooks'];
 const loggedOut = () => { try { return sessionStorage.getItem(KEY + '-out') === '1'; } catch { return false; } };
 
-on('GET', /^\/api\/auth\/me$/, () => (loggedOut() ? err('Not logged in', 401) : json(db.users[0])));
+const viewAs = () => { try { return Number(sessionStorage.getItem(KEY + '-as')) || 1; } catch { return 1; } };
+const currentUser = () => db.users.find(u => u.id === viewAs()) || db.users[0];
+on('GET', /^\/api\/auth\/me$/, () => (loggedOut() ? err('Not logged in', 401) : json(currentUser())));
 on('POST', /^\/api\/auth\/login$/, () => { try { sessionStorage.removeItem(KEY + '-out'); } catch { /* */ } return json(db.users[0]); });
 on('POST', /^\/api\/auth\/logout$/, () => { try { sessionStorage.setItem(KEY + '-out', '1'); } catch { /* */ } return json({ ok: true }); });
 
@@ -101,7 +107,8 @@ on('POST', /^\/api\/v1\/quotes$/, (m, b) => {
 });
 on('GET', /^\/api\/v1\/quotes$/, (m, b, url) => {
   const qs = url.searchParams, s = (qs.get('q') || '').toLowerCase(), st = qs.get('status'), dl = qs.get('dealer');
-  const rows = db.quotes.filter(q => (!st || q.status === st) && (!dl || q.dealer_id === dl) && (!s || [q.first_name, q.last_name, q.email, q.phone, q.number].join(' ').toLowerCase().includes(s)));
+  const lim = currentUser().dealer_id;
+  const rows = db.quotes.filter(q => (!st || q.status === st) && (!dl || q.dealer_id === dl) && (!lim || q.dealer_id === lim) && (!s || [q.first_name, q.last_name, q.email, q.phone, q.number].join(' ').toLowerCase().includes(s)));
   return json({ total: rows.length, data: rows.map(fmt) });
 });
 on('GET', /^\/api\/v1\/quotes\/(\d+)$/, m => { const q = db.quotes.find(x => x.id === +m[1]); return q ? json({ ...fmt(q), internal_notes: q.internal_notes, pricing_lines: q.pricing.lines }) : err('Not found', 404); });
@@ -155,7 +162,8 @@ on('POST', /^\/api\/admin\/api-keys$/, (m, b) => { const key = 'sb_demo_' + tok(
 on('DELETE', /^\/api\/admin\/api-keys\/(\d+)$/, m => { db.api_keys = db.api_keys.filter(k => k.id !== +m[1]); save(); return json(null, 204); });
 on('POST', /^\/api\/admin\/ghl\/test$/, () => err('Demo mode: GoHighLevel is not contacted from the demo. This button works on your deployed app.'));
 on('GET', /^\/api\/admin\/users$/, () => json(db.users));
-on('POST', /^\/api\/admin\/users$/, (m, b) => { if (!b.email || !b.password || b.password.length < 8) return err('Email and an 8+ character password are required'); db.users.push({ id: nextId(), email: b.email, name: b.name || '', created_at: now() }); save(); return json({ ok: true }); });
+on('POST', /^\/api\/admin\/users$/, (m, b) => { if (!b.email || !b.password || b.password.length < 8) return err('Email and an 8+ character password are required'); db.users.push({ id: nextId(), email: b.email, name: b.name || '', role: b.role || 'admin', dealer_id: b.role === 'admin' ? null : (b.dealer_id || null), created_at: now() }); save(); return json({ ok: true }); });
+on('PATCH', /^\/api\/admin\/users\/(\d+)$/, (m, b) => { const u = db.users.find(x => x.id === +m[1]); if (!u) return err('Not found', 404); if (b.role) u.role = b.role; if ('dealer_id' in b) u.dealer_id = b.dealer_id || null; if (u.role === 'admin') u.dealer_id = null; save(); return json({ ok: true }); });
 on('DELETE', /^\/api\/admin\/users\/(\d+)$/, m => { if (+m[1] === 1) return err("You can't delete yourself"); db.users = db.users.filter(u => u.id !== +m[1]); save(); return json(null, 204); });
 on('POST', /^\/api\/admin\/account$/, (m, b) => { Object.assign(db.users[0], { email: b.email || db.users[0].email, name: b.name || db.users[0].name }); save(); return json({ ok: true }); });
 on('POST', /^\/api\/admin\/upload$/, async (m, b) => {
@@ -195,4 +203,6 @@ window.__planUrl = id => {
   const svg = floorPlanSVG(catalog(true), q.config, { customer: q, quote_number: q.number });
   return URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
 };
+window.__shedDemoUsers = () => db.users;
+window.__shedDemoViewAs = id => { try { sessionStorage.setItem(KEY + '-as', String(id)); } catch { /* */ } location.hash = ''; location.reload(); };
 window.__shedDemoReset = () => { try { localStorage.removeItem(KEY); } catch { /* */ } location.reload(); };

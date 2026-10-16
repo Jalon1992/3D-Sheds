@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { db, all, get, run, getSettings, setSettings, getCatalog, JSON_COLS } from './src/db.js';
 import { seed } from './src/seed.js';
-import { requireAuth, requireSession, issueSession, clearSession, verifyPassword, hashPassword, createApiKey, readSession } from './src/auth.js';
+import { requireAuth, requireSession, issueSession, clearSession, verifyPassword, hashPassword, createApiKey, readSession, ROLES } from './src/auth.js';
 import { emit, deliver, formatQuote, recentLog, pushToGHL, EVENTS } from './src/integrations.js';
 import { openapi } from './src/openapi.js';
 import { priceConfig, sanitizeConfig } from './public/js/shared/pricing.js';
@@ -122,6 +122,7 @@ v1.get('/quotes', (req, res) => {
   const where = [], p = [];
   if (req.query.status) { where.push('status = ?'); p.push(req.query.status); }
   if (req.query.dealer) { where.push('dealer_id = ?'); p.push(String(req.query.dealer)); }
+  if (req.user?.dealer_id) { where.push('dealer_id = ?'); p.push(String(req.user.dealer_id)); }
   if (req.query.since) { where.push('created_at >= ?'); p.push(String(req.query.since).replace('T', ' ').replace('Z', '')); }
   if (req.query.q) { where.push("(first_name || ' ' || last_name LIKE ? OR email LIKE ? OR phone LIKE ? OR number LIKE ?)"); const l = `%${req.query.q}%`; p.push(l, l, l, l); }
   const w = where.length ? 'WHERE ' + where.join(' AND ') : '';
@@ -130,14 +131,15 @@ v1.get('/quotes', (req, res) => {
   const rows = all(`SELECT * FROM quotes ${w} ORDER BY id DESC LIMIT ? OFFSET ?`, ...p, limit, offset);
   res.json({ total, data: rows.map(q => ({ ...formatQuote(q, baseUrl(req)), internal_notes: q.internal_notes, ghl_status: q.ghl_status })) });
 });
+const ownQuote = (req, q) => !req.user?.dealer_id || String(q.dealer_id) === String(req.user.dealer_id);
 v1.get('/quotes/:id', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
-  if (!q) return bad(res, 'Not found', 404);
+  if (!q || !ownQuote(req, q)) return bad(res, 'Not found', 404);
   res.json({ ...formatQuote(q, baseUrl(req)), internal_notes: q.internal_notes, ghl_status: q.ghl_status, pricing_lines: q.pricing.lines });
 });
 v1.patch('/quotes/:id', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
-  if (!q) return bad(res, 'Not found', 404);
+  if (!q || !ownQuote(req, q)) return bad(res, 'Not found', 404);
   const { status, internal_notes } = req.body || {};
   run("UPDATE quotes SET status = COALESCE(?, status), internal_notes = COALESCE(?, internal_notes), updated_at = datetime('now') WHERE id = ?",
     status ?? null, internal_notes ?? null, q.id);
@@ -148,7 +150,7 @@ v1.patch('/quotes/:id', (req, res) => {
 v1.delete('/quotes/:id', (req, res) => { run('DELETE FROM quotes WHERE id = ?', Number(req.params.id)); res.sendStatus(204); });
 v1.get('/quotes/:id/floorplan.svg', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
-  if (!q) return res.status(404).send('Not found');
+  if (!q || !ownQuote(req, q)) return res.status(404).send('Not found');
   sendPlan(res, q);
 });
 v1.post('/quotes/:id/resend', (req, res) => {
@@ -228,13 +230,19 @@ app.post('/api/auth/login', rateLimit(10, 60000), (req, res) => {
   const u = get('SELECT * FROM users WHERE email = ?', String(email || '').toLowerCase().trim());
   if (!u || !verifyPassword(String(password || ''), u.password_hash)) return bad(res, 'Wrong email or password', 401);
   issueSession(res, u.id);
-  res.json({ id: u.id, email: u.email, name: u.name });
+  res.json({ id: u.id, email: u.email, name: u.name, role: u.role || 'admin', dealer_id: u.dealer_id || null });
 });
 app.post('/api/auth/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
 app.get('/api/auth/me', (req, res) => { const u = readSession(req); u ? res.json(u) : bad(res, 'Not logged in', 401); });
 
 const admin = express.Router();
 admin.use(requireSession);
+// Non-admin roles may only read the catalog/settings (to draw sheds) and manage their own login
+admin.use((req, res, next) => {
+  if (req.user.role === 'admin') return next();
+  const open = (req.method === 'GET' && ['/catalog', '/settings'].includes(req.path)) || (req.method === 'POST' && req.path === '/account');
+  return open ? next() : res.status(403).json({ error: 'Your account does not have access to this.' });
+});
 admin.post('/account', (req, res) => {
   const { email, name, current_password, new_password } = req.body || {};
   const u = get('SELECT * FROM users WHERE id = ?', req.user.id);
@@ -244,12 +252,24 @@ admin.post('/account', (req, res) => {
     email ? String(email).toLowerCase() : null, name || null, new_password ? hashPassword(String(new_password)) : u.password_hash, u.id);
   res.json({ ok: true });
 });
-admin.get('/users', (req, res) => res.json(all('SELECT id, email, name, created_at FROM users')));
+admin.get('/users', (req, res) => res.json(all("SELECT id, email, name, COALESCE(role, 'admin') AS role, dealer_id, created_at FROM users")));
 admin.post('/users', (req, res) => {
-  const { email, name, password } = req.body || {};
+  const { email, name, password, role = 'admin', dealer_id = null } = req.body || {};
   if (!email || !password || password.length < 8) return bad(res, 'Email and an 8+ character password are required');
-  try { run('INSERT INTO users (email, name, password_hash) VALUES (?,?,?)', email.toLowerCase(), name || '', hashPassword(password)); res.json({ ok: true }); }
+  if (!ROLES.includes(role)) return bad(res, 'Unknown role');
+  try { run('INSERT INTO users (email, name, password_hash, role, dealer_id) VALUES (?,?,?,?,?)', email.toLowerCase(), name || '', hashPassword(password), role, role === 'admin' ? null : (dealer_id || null)); res.json({ ok: true }); }
   catch { bad(res, 'That email already exists'); }
+});
+admin.patch('/users/:id', (req, res) => {
+  const u = get('SELECT * FROM users WHERE id = ?', Number(req.params.id)); if (!u) return bad(res, 'Not found', 404);
+  const { role, dealer_id, name, password } = req.body || {};
+  if (role && !ROLES.includes(role)) return bad(res, 'Unknown role');
+  if (u.id === req.user.id && role && role !== 'admin') return bad(res, "You can't remove your own admin access");
+  if (password && String(password).length < 8) return bad(res, 'Password must be at least 8 characters');
+  const r = role || u.role || 'admin';
+  run('UPDATE users SET role = ?, dealer_id = ?, name = COALESCE(?, name), password_hash = ? WHERE id = ?',
+    r, r === 'admin' ? null : (dealer_id === undefined ? u.dealer_id : (dealer_id || null)), name ?? null, password ? hashPassword(String(password)) : u.password_hash, u.id);
+  res.json({ ok: true });
 });
 admin.delete('/users/:id', (req, res) => {
   if (Number(req.params.id) === req.user.id) return bad(res, "You can't delete yourself");

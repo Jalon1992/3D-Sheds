@@ -11,4 +11,11 @@ for (const f of ['three.module.js', 'three.core.js']) {
   if (existsSync(join(src, 'build', f))) cpSync(join(src, 'build', f), join(dst, f));
 }
 cpSync(join(src, 'examples', 'jsm'), join(dst, 'addons'), { recursive: true });
-console.log('Copied three.js to public/vendor/three');
+// PDF libraries (drawing packages are built in the browser)
+const pdfDst = join(root, 'public', 'vendor', 'pdf');
+mkdirSync(pdfDst, { recursive: true });
+for (const [pkg, file] of [['jspdf', 'jspdf.umd.min.js'], ['svg2pdf.js', 'svg2pdf.umd.min.js']]) {
+  const f = join(root, 'node_modules', pkg, 'dist', file);
+  if (existsSync(f)) cpSync(f, join(pdfDst, file));
+}
+console.log('Copied three.js + PDF libraries to public/vendor');

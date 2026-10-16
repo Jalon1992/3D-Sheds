@@ -2,6 +2,7 @@
 import { ShedScene, BUILTIN_KINDS } from '../js/shed3d.js';
 import { defaultConfig, money, WALLS, DEFAULT_ROOFING, MAX_TIERS, roofingList } from '../js/shared/pricing.js';
 import { shedGeometry, roofSections } from '../js/shared/geometry.js';
+import { buildDrawingPackage } from '../js/drawings.js';
 const roofing = () => (Array.isArray(settings.roofing) && settings.roofing.length ? settings.roofing : DEFAULT_ROOFING);
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -126,9 +127,15 @@ $('#loginForm').onsubmit = async e => {
 $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); location.hash = ''; location.reload(); };
 
 const ROUTES = { dashboard, quotes, styles, colors, options, pricing: pricingPage, integrations, settings: settingsPage, account };
+const ROLE_LABEL = { admin: 'Admin', sales: 'Sales', production: 'Production' };
+const isAdmin = () => (me?.role || 'admin') === 'admin';
+const canEditQuotes = () => ['admin', 'sales'].includes(me?.role || 'admin');
+const ROLE_PAGES = { sales: ['quotes', 'account'], production: ['quotes', 'account'] };
+const allowed = name => isAdmin() || (ROLE_PAGES[me.role] || []).includes(name);
 async function route() {
   const [r, arg] = location.hash.replace(/^#\/?/, '').split('?')[0].split('/');
-  const name = ROUTES[r] ? r : 'dashboard';
+  let name = ROUTES[r] ? r : (isAdmin() ? 'dashboard' : 'quotes');
+  if (!allowed(name)) name = 'quotes';
   $$('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === name));
   const old = $('#main'), fresh = old.cloneNode(false); old.replaceWith(fresh); // drop old listeners
   $('#main').innerHTML = '<div class="empty">Loading…</div>';
@@ -137,6 +144,10 @@ async function route() {
 async function loadCatalog() { catalog = await api('GET', '/api/admin/catalog'); return catalog; }
 async function start() {
   $('#app').hidden = false;
+  // hide admin-only navigation for sales / production accounts
+  $$('#nav a').forEach(a => { a.hidden = !allowed(a.dataset.r); });
+  $$('#nav .nav-h').forEach(h => { let n = h.nextElementSibling, any = false; while (n && !n.classList.contains('nav-h')) { if (n.tagName === 'A' && !n.hidden) any = true; n = n.nextElementSibling; } h.hidden = !any; });
+  if (!isAdmin()) $('#sideName').insertAdjacentHTML('afterend', `<span class="pill" style="margin-left:6px">${ROLE_LABEL[me.role]}</span>`);
   settings = await api('GET', '/api/admin/settings');
   $('#sideName').textContent = settings.company_name || 'Shed Builder';
   if (settings.brand_color) document.documentElement.style.setProperty('--brand', settings.brand_color);
@@ -189,12 +200,13 @@ async function quotes(id) {
   const render = async () => {
     const search = $('#qs')?.value || '', status = $('#qst')?.value || '';
     const res = await api('GET', `/api/v1/quotes?limit=200&q=${encodeURIComponent(search)}&status=${status}`);
-    $('#qtable').innerHTML = res.data.length ? `<table class="tbl"><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Shed</th><th>Dealer / tier</th><th class="num">Total</th><th>Status</th><th>CRM</th></tr>
+    $('#qtable').innerHTML = res.data.length ? `<table class="tbl"><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Shed</th><th>Dealer / tier</th><th class="num">Total</th><th>Status</th><th>CRM</th><th></th></tr>
       ${res.data.map(x => `<tr class="click" data-id="${x.id}"><td><b>${esc(x.number)}</b></td><td class="muted">${fmtDate(x.created_at)}</td>
       <td>${esc(x.customer.full_name)}<div class="muted" style="font-size:12.5px">${esc(x.customer.email)} ${x.customer.phone ? '· ' + esc(x.customer.phone) : ''}</div></td>
       <td>${esc(x.shed.style)} <span class="muted">${esc(x.shed.size)}</span></td>
       <td>${x.dealer ? esc(x.dealer.name) : ''}<div class="muted" style="font-size:12.5px">${esc(x.pricing.tier || '')}${x.pricing.pricing_zip ? ' · ZIP ' + esc(x.pricing.pricing_zip) : ''}</div></td><td class="num"><b>${fmt(x.pricing.total)}</b></td>
-      <td><span class="pill ${esc(x.status)}">${esc(x.status)}</span></td><td>${x.integrations.ghl_contact_id ? '<span class="pill on">GHL ✓</span>' : '<span class="muted">—</span>'}</td></tr>`).join('')}</table>`
+      <td><span class="pill ${esc(x.status)}">${esc(x.status)}</span></td><td>${x.integrations.ghl_contact_id ? '<span class="pill on">GHL ✓</span>' : '<span class="muted">—</span>'}</td>
+      <td class="num"><button class="btn ghost sm" data-draw="${x.id}" title="Floor plan + elevations in one PDF">Drawings PDF</button></td></tr>`).join('')}</table>`
       : '<div class="empty">No quotes found. Submit one from the configurator to see it here.</div>';
     $('#qcount').textContent = `${res.total} quote${res.total === 1 ? '' : 's'}`;
   };
@@ -204,7 +216,10 @@ async function quotes(id) {
     <div class="card tbl-wrap" id="qtable"></div>`;
   let t; $('#qs').oninput = () => { clearTimeout(t); t = setTimeout(render, 250); };
   $('#qst').onchange = render;
-  $('#qtable').onclick = e => { const tr = e.target.closest('tr[data-id]'); if (tr) quoteDetail(Number(tr.dataset.id), render); };
+  $('#qtable').onclick = e => {
+    const d = e.target.closest('[data-draw]'); if (d) { e.stopPropagation(); return downloadDrawings(Number(d.dataset.draw), d); }
+    const tr = e.target.closest('tr[data-id]'); if (tr) quoteDetail(Number(tr.dataset.id), render);
+  };
   $('#csv').onclick = guard(async e => {
     e.preventDefault();
     const res = await api('GET', '/api/v1/quotes?limit=500');
@@ -216,6 +231,17 @@ async function quotes(id) {
   await render();
   if (id) quoteDetail(Number(id), render);
 }
+async function downloadDrawings(id, btn) {
+  const label = btn?.textContent;
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Building PDF…'; }
+    const [x, cat] = await Promise.all([api('GET', `/api/v1/quotes/${id}`), catalog ? Promise.resolve(catalog) : loadCatalog()]);
+    const blob = await buildDrawingPackage(cat, x, { company: settings.company_name || '' });
+    saveFile(blob, `${x.number}-drawings.pdf`);
+    toast('Drawings PDF ready');
+  } catch (e) { toast(e.message, true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
+}
 async function quoteDetail(id, refresh) {
   const x = await api('GET', `/api/v1/quotes/${id}`);
   const c = x.customer;
@@ -224,7 +250,8 @@ async function quoteDetail(id, refresh) {
     body: `<div class="drawer"><div>
       <div class="row" style="margin-bottom:14px"><a class="btn ghost sm" target="_blank" href="${esc(x.links.view_3d)}">Open in 3D ↗</a>
         <a class="btn ghost sm" target="_blank" href="${esc(x.links.download_3d_model)}">Download 3D model (.glb)</a>
-        <button class="btn ghost sm" id="qPlanDl">Download floor plan</button></div>
+        <button class="btn ghost sm" id="qPlanDl">Download floor plan</button>
+        <button class="btn primary sm" id="qDraw">Download drawings (PDF)</button></div>
       <div class="plan-prev"><img src="${planUrl(x.id)}" alt="Floor plan"></div>
       <h3 style="margin:18px 0 6px">Line items</h3><div class="lines">${x.pricing_lines.map(l => `<div class="ln"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall ? `<small>${esc(l.wall)}</small>` : ''}</div><div>${fmt(l.amount)}</div></div>`).join('')}
       ${x.pricing.delivery ? `<div class="ln"><div>Delivery</div><div>${fmt(x.pricing.delivery)}</div></div>` : ''}${x.pricing.tax ? `<div class="ln"><div>Tax</div><div>${fmt(x.pricing.tax)}</div></div>` : ''}
@@ -239,21 +266,22 @@ async function quoteDetail(id, refresh) {
         <dt>Dealer lot</dt><dd>${x.dealer ? esc(x.dealer.name) : '—'}</dd><dt>Price tier</dt><dd>${esc(x.pricing.tier || '—')}${x.pricing.pricing_zip ? ' (ZIP ' + esc(x.pricing.pricing_zip) + ')' : ''}</dd>
         <dt>GHL</dt><dd>${x.integrations.ghl_contact_id ? `Contact <code>${esc(x.integrations.ghl_contact_id)}</code>` : 'Not synced'}</dd>
       </dl></div>
-      <div class="card card-pad" style="margin-top:14px;display:grid;gap:12px">
+      ${canEditQuotes() ? `<div class="card card-pad" style="margin-top:14px;display:grid;gap:12px">
         <label class="fld"><span>Status</span><select id="qStatus">${STATUSES.map(s => `<option ${s === x.status ? 'selected' : ''}>${s}</option>`).join('')}</select></label>
         <label class="fld"><span>Internal notes</span><textarea id="qNotes">${esc(x.internal_notes || '')}</textarea></label>
         <button class="btn primary" id="qSave">Save</button>
-        <button class="btn ghost" id="qResend">Re-send to webhooks / GHL</button>
-        <button class="btn danger" id="qDel">Delete quote</button>
-      </div></div></div>`,
+        ${isAdmin() ? `<button class="btn ghost" id="qResend">Re-send to webhooks / GHL</button>
+        <button class="btn danger" id="qDel">Delete quote</button>` : ''}
+      </div>` : `<div class="card card-pad" style="margin-top:14px"><dl class="kv"><dt>Status</dt><dd><span class="pill ${esc(x.status)}">${esc(x.status)}</span></dd>${x.internal_notes ? `<dt>Notes</dt><dd>${esc(x.internal_notes)}</dd>` : ''}</dl></div>`}</div></div>`,
     onMount: root => {
       $('#qPlanDl', root).onclick = guard(async () => {
         const r = await fetch(planUrl(x.id)); if (!r.ok) throw new Error('Could not load the floor plan');
         saveFile(new Blob([await r.text()], { type: 'image/svg+xml' }), `${x.number}-floor-plan.svg`);
       });
-      $('#qSave', root).onclick = guard(async () => { await api('PATCH', `/api/v1/quotes/${id}`, { status: $('#qStatus').value, internal_notes: $('#qNotes').value }); toast('Saved'); refresh && refresh(); });
-      $('#qResend', root).onclick = guard(async () => { await api('POST', `/api/v1/quotes/${id}/resend`); toast('Queued — check Integrations → Delivery log'); });
-      $('#qDel', root).onclick = guard(async () => { if (!confirmBox('Delete this quote permanently?')) return; await api('DELETE', `/api/v1/quotes/${id}`); closeModal(); refresh && refresh(); toast('Deleted'); });
+      $('#qDraw', root).onclick = () => downloadDrawings(x.id, $('#qDraw', root));
+      if ($('#qSave', root)) $('#qSave', root).onclick = guard(async () => { await api('PATCH', `/api/v1/quotes/${id}`, { status: $('#qStatus').value, internal_notes: $('#qNotes').value }); toast('Saved'); refresh && refresh(); });
+      if ($('#qResend', root)) $('#qResend', root).onclick = guard(async () => { await api('POST', `/api/v1/quotes/${id}/resend`); toast('Queued — check Integrations → Delivery log'); });
+      if ($('#qDel', root)) $('#qDel', root).onclick = guard(async () => { if (!confirmBox('Delete this quote permanently?')) return; await api('DELETE', `/api/v1/quotes/${id}`); closeModal(); refresh && refresh(); toast('Deleted'); });
     },
   });
 }
@@ -742,23 +770,41 @@ async function settingsPage() {
 // Account
 // ---------------------------------------------------------------------------
 async function account() {
-  const users = await api('GET', '/api/admin/users');
-  $('#main').innerHTML = head('Account & users') + `<div class="grid g2">
-    <div class="card card-pad"><h2>Your login</h2><form class="form" id="af" style="margin-top:12px">
+  const yours = `<div class="card card-pad"><h2>Your login</h2><p class="muted" style="margin:2px 0 0">Role: <b>${ROLE_LABEL[me.role || 'admin']}</b>${me.dealer_id ? ` · ${esc((settings.dealers || []).find(d => String(d.id) === String(me.dealer_id))?.name || me.dealer_id)}` : ''}</p><form class="form" id="af" style="margin-top:12px">
       <label class="fld"><span>Name</span><input name="name" value="${esc(me.name || '')}"></label>
       <label class="fld"><span>Email</span><input name="email" type="email" value="${esc(me.email)}"></label>
       <label class="fld"><span>Current password *</span><input name="current_password" type="password" autocomplete="current-password"></label>
       <label class="fld"><span>New password</span><input name="new_password" type="password" autocomplete="new-password" placeholder="8+ characters"></label></form>
-      <button class="btn primary" id="asave" style="margin-top:14px">Update</button></div>
-    <div class="card card-pad"><h2>Team members</h2><table class="tbl" style="margin:10px 0">${users.map(u => `<tr><td><b>${esc(u.name || '')}</b> <span class="muted">${esc(u.email)}</span></td><td class="num">${u.id === me.id ? '<span class="pill">You</span>' : `<button class="icon-btn" data-del="${u.id}">${TRASH}</button>`}</td></tr>`).join('')}</table>
+      <button class="btn primary" id="asave" style="margin-top:14px">Update</button></div>`;
+  if (!isAdmin()) {
+    $('#main').innerHTML = head('Your account') + `<div class="grid g2">${yours}</div>`;
+    $('#asave').onclick = guard(async () => { const d = Object.fromEntries(new FormData($('#af'))); await api('POST', '/api/admin/account', d); me = await api('GET', '/api/auth/me'); toast('Account updated'); account(); });
+    return;
+  }
+  const users = await api('GET', '/api/admin/users');
+  const dealers = settings.dealers || [];
+  const roleSel = (v, attrs) => `<select class="in" ${attrs}>${Object.entries(ROLE_LABEL).map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const lotSel = (v, attrs) => `<select class="in" ${attrs}><option value="">All dealer lots</option>${dealers.map(d => `<option value="${esc(d.id)}" ${String(d.id) === String(v) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select>`;
+  $('#main').innerHTML = head('Account & users') + `<div class="grid g2">${yours}
+    <div class="card card-pad"><h2>Team members</h2>
+      <p class="muted" style="margin:2px 0 8px"><b>Admin</b>: everything. <b>Sales</b>: quotes (status & notes) and drawings. <b>Production</b>: view quotes and download drawings (floor plan + elevations PDF). Sales and Production can be limited to one dealer lot.</p>
+      <div class="tbl-wrap"><table class="tbl" style="margin:6px 0 14px"><tr><th>Name</th><th>Role</th><th>Dealer lot</th><th></th></tr>${users.map(u => `<tr><td><b>${esc(u.name || '')}</b><div class="muted" style="font-size:12.5px">${esc(u.email)}</div></td>
+        <td>${u.id === me.id ? `<span class="pill">${ROLE_LABEL[u.role]} (you)</span>` : roleSel(u.role, `data-ur="${u.id}"`)}</td>
+        <td>${u.role === 'admin' ? '<span class="muted">—</span>' : lotSel(u.dealer_id, `data-ul="${u.id}"`)}</td>
+        <td class="num">${u.id === me.id ? '' : `<button class="icon-btn" data-del="${u.id}">${TRASH}</button>`}</td></tr>`).join('')}</table></div>
       <form class="form" id="uf"><label class="fld"><span>Name</span><input name="name"></label><label class="fld"><span>Email</span><input name="email" type="email"></label>
+      <label class="fld"><span>Role</span>${roleSel('production', 'name="role"')}</label><label class="fld"><span>Dealer lot</span>${lotSel('', 'name="dealer_id"')}</label>
       <label class="fld full"><span>Temporary password</span><input name="password" type="text" placeholder="8+ characters"></label></form>
       <button class="btn ghost" id="uadd" style="margin-top:12px">+ Add team member</button></div></div>`;
   $('#asave').onclick = guard(async () => { const d = Object.fromEntries(new FormData($('#af'))); await api('POST', '/api/admin/account', d); me = await api('GET', '/api/auth/me'); toast('Account updated'); account(); });
   $('#uadd').onclick = guard(async () => { await api('POST', '/api/admin/users', Object.fromEntries(new FormData($('#uf')))); toast('User added'); account(); });
+  $('#main').onchange = guard(async e => {
+    const t = e.target;
+    if (t.dataset.ur) { await api('PATCH', `/api/admin/users/${t.dataset.ur}`, { role: t.value }); toast('Role updated'); account(); }
+    if (t.dataset.ul) { await api('PATCH', `/api/admin/users/${t.dataset.ul}`, { dealer_id: t.value }); toast('Dealer lot updated'); }
+  });
   $('#main').onclick = guard(async e => { const b = e.target.closest('[data-del]'); if (b && confirmBox('Remove this user?')) { await api('DELETE', `/api/admin/users/${b.dataset.del}`); account(); } });
 }
-
 
 // ---------------------------------------------------------------------------
 // Price tiers, dealer lots and ZIP codes

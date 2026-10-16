@@ -23,6 +23,7 @@ const bannerCss = `
 .demo-banner a{color:#7a3d06;font-weight:700}
 .demo-banner button{margin-left:10px;border:1px solid #e7c58c;background:#fff;border-radius:6px;padding:2px 8px;font:inherit;color:#7a3d06;cursor:pointer}`;
 const inline = (html, cssFile, js, extraCss, title) => html
+  .replace(/<script src="\/vendor\/pdf\/([^"]+)"><\/script>/g, (m, f) => `<script>${readFileSync('node_modules/' + (f.startsWith('jspdf') ? 'jspdf' : 'svg2pdf.js') + '/dist/' + f, 'utf8').replace(/<\/script/gi, '<\\/script')}</script>`)
   .replace(/<link rel="stylesheet" href="[^"]+\.css">/, () => `<style>${readFileSync(cssFile, 'utf8')}${extraCss}</style>`)
   .replace(/<script type="importmap">[\s\S]*?<\/script>/, '')
   .replace(/<script type="module" src="[^"]+"><\/script>/, () => `<script type="module">${js}</script>`)

@@ -3,8 +3,12 @@ window.__configuratorUrl = 'index.html';
 addEventListener('DOMContentLoaded', () => {
   const b = document.createElement('div');
   b.className = 'demo-banner';
-  b.innerHTML = '<b>Admin demo</b> — changes are saved in this browser only and show up in the <a href="index.html">3D builder</a>. Webhooks and GoHighLevel run only on your deployed app. <button type="button" id="demoReset">Reset demo data</button>';
+  b.innerHTML = '<b>Admin demo</b> — changes are saved in this browser only and show up in the <a href="index.html">3D builder</a>. Webhooks and GoHighLevel run only on your deployed app. <label>View as <select id="demoAs"></select></label> <button type="button" id="demoReset">Reset demo data</button>';
   document.body.prepend(b);
+  const sel = b.querySelector('#demoAs');
+  let as = 1; try { as = Number(sessionStorage.getItem('shedbuilder-demo-v1-as')) || 1; } catch { /* */ }
+  sel.innerHTML = (window.__shedDemoUsers?.() || []).map(u => `<option value="${u.id}" ${u.id === as ? 'selected' : ''}>${u.name} (${u.role})</option>`).join('');
+  sel.onchange = () => window.__shedDemoViewAs(sel.value);
   b.querySelector('#demoReset').onclick = () => {
     if (b.dataset.confirm) return window.__shedDemoReset();
     b.dataset.confirm = '1'; b.querySelector('#demoReset').textContent = 'Click again to reset everything';
