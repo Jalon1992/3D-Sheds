@@ -66,7 +66,8 @@ function flatForGHL(d) {
     first_name: d.customer.first_name, last_name: d.customer.last_name, full_name: d.customer.full_name,
     email: d.customer.email, phone: d.customer.phone, address1: d.customer.address, city: d.customer.city,
     state: d.customer.state, postal_code: d.customer.zip, quote_number: d.number, quote_total: d.pricing.total,
-    shed_style: d.shed.style, shed_size: d.shed.size, shed_roofing: d.shed.roofing, shed_summary: d.summary, shed_3d_link: d.links.view_3d,
+    shed_style: d.shed.style, shed_size: d.shed.size, shed_roofing: d.shed.roofing,
+    dealer_name: d.dealer?.name || '', dealer_id: d.dealer?.id || '', price_tier: d.pricing.tier || '', shed_summary: d.summary, shed_3d_link: d.links.view_3d,
     floor_plan_link: d.links.floor_plan_svg, options_list: d.options.map(o => o.name).join(', '),
   };
 }
@@ -93,6 +94,7 @@ export async function pushToGHL(quoteRow, data) {
   const s = getSettings();
   const token = s.ghl_token, locationId = s.ghl_location_id;
   const tags = String(s.ghl_tags || 'shed-quote').split(',').map(t => t.trim()).filter(Boolean);
+  if (data.dealer?.name) tags.push('dealer: ' + data.dealer.name);
   const customFields = [];
   if (s.ghl_custom_fields && typeof s.ghl_custom_fields === 'object') {
     for (const [key, path] of Object.entries(s.ghl_custom_fields)) {
@@ -122,6 +124,8 @@ export async function pushToGHL(quoteRow, data) {
       `Shed quote ${data.number} — $${Number(data.pricing.total).toFixed(2)}`,
       `${data.shed.style} ${data.shed.size}`,
       data.shed.roofing ? `Roofing: ${data.shed.roofing}` : '',
+      data.dealer?.name ? `Dealer lot: ${data.dealer.name}` : '',
+      data.pricing.tier ? `Price tier: ${data.pricing.tier}${data.pricing.pricing_zip ? ' (ZIP ' + data.pricing.pricing_zip + ')' : ''}` : '',
       ...Object.entries(data.shed.colors).map(([k, v]) => `${k}: ${v}`),
       '', 'Options:', ...data.options.map(o => `• ${o.name}${o.wall ? ' (' + o.wall + ')' : ''} ${o.price ? '$' + o.price : ''}`),
       '', `3D view: ${data.links.view_3d}`, `Floor plan: ${data.links.floor_plan_svg}`,

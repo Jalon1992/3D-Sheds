@@ -46,6 +46,8 @@ Failed deliveries are retried after 1s, 5s and 25s.
           properties: {
             style_id: { type: 'integer' }, size_id: { type: 'integer' },
             roof_material: { type: 'string', example: 'metal', description: 'Roofing material key (e.g. shingle = Architectural Shingles, metal = Ag Panel Metal)' },
+            dealer_id: { type: 'string', description: 'Pricing by dealer lot: the dealer lot id (see catalog settings.dealers)' },
+            zip: { type: 'string', description: 'Pricing by ZIP: the customer ZIP used to pick the price tier' },
             colors: { type: 'object', properties: { siding: { type: 'integer' }, trim: { type: 'integer' }, roof: { type: 'integer' }, door: { type: 'integer' }, window: { type: 'integer' } } },
             items: {
               type: 'array', items: {
@@ -82,7 +84,8 @@ Failed deliveries are retried after 1s, 5s and 25s.
             customer: { allOf: [ref('Customer')], properties: { full_name: { type: 'string' } } },
             shed: { type: 'object', properties: { style: { type: 'string' }, size: { type: 'string' }, roofing: { type: 'string', example: 'Ag Panel Metal' }, width_ft: { type: 'number' }, depth_ft: { type: 'number' }, sq_ft: { type: 'number' }, colors: { type: 'object', additionalProperties: { type: 'string' } } } },
             options: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, category: { type: 'string' }, wall: { type: 'string' }, price: { type: 'number' }, note: { type: 'string' } } } },
-            pricing: { type: 'object', properties: { subtotal: { type: 'number' }, delivery: { type: 'number' }, tax: { type: 'number' }, total: { type: 'number' } } },
+            pricing: { type: 'object', properties: { subtotal: { type: 'number' }, delivery: { type: 'number' }, tax: { type: 'number' }, total: { type: 'number' }, tier: { type: 'string', description: 'Price tier used' }, pricing_zip: { type: 'string' } } },
+            dealer: { type: 'object', nullable: true, properties: { id: { type: 'string' }, name: { type: 'string' }, city: { type: 'string' }, state: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' } } },
             summary: { type: 'string', description: 'One-line human readable summary — handy for CRM notes/SMS' },
             links: { type: 'object', properties: { view_3d: { type: 'string' }, download_3d_model: { type: 'string' }, floor_plan_svg: { type: 'string' }, admin: { type: 'string' } } },
             config: ref('Config'),
@@ -137,7 +140,7 @@ Failed deliveries are retried after 1s, 5s and 25s.
         get: {
           tags: ['Quotes'], summary: 'List quotes', security: [{ ApiKey: [] }],
           parameters: [
-            { name: 'status', in: 'query', schema: { type: 'string' } }, { name: 'since', in: 'query', schema: { type: 'string' }, description: 'ISO date — only quotes created after' },
+            { name: 'status', in: 'query', schema: { type: 'string' } }, { name: 'dealer', in: 'query', schema: { type: 'string' }, description: 'Dealer lot id' }, { name: 'since', in: 'query', schema: { type: 'string' }, description: 'ISO date — only quotes created after' },
             { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Search name/email/phone/number' },
             { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }, { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
           ],

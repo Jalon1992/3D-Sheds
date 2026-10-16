@@ -1,6 +1,6 @@
 // Admin dashboard (vanilla JS SPA).
 import { ShedScene, BUILTIN_KINDS } from '../js/shed3d.js';
-import { defaultConfig, money, WALLS, DEFAULT_ROOFING } from '../js/shared/pricing.js';
+import { defaultConfig, money, WALLS, DEFAULT_ROOFING, MAX_TIERS, roofingList } from '../js/shared/pricing.js';
 import { shedGeometry, roofSections } from '../js/shared/geometry.js';
 const roofing = () => (Array.isArray(settings.roofing) && settings.roofing.length ? settings.roofing : DEFAULT_ROOFING);
 
@@ -125,7 +125,7 @@ $('#loginForm').onsubmit = async e => {
 };
 $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); location.hash = ''; location.reload(); };
 
-const ROUTES = { dashboard, quotes, styles, colors, options, integrations, settings: settingsPage, account };
+const ROUTES = { dashboard, quotes, styles, colors, options, pricing: pricingPage, integrations, settings: settingsPage, account };
 async function route() {
   const [r, arg] = location.hash.replace(/^#\/?/, '').split('?')[0].split('/');
   const name = ROUTES[r] ? r : 'dashboard';
@@ -189,10 +189,11 @@ async function quotes(id) {
   const render = async () => {
     const search = $('#qs')?.value || '', status = $('#qst')?.value || '';
     const res = await api('GET', `/api/v1/quotes?limit=200&q=${encodeURIComponent(search)}&status=${status}`);
-    $('#qtable').innerHTML = res.data.length ? `<table class="tbl"><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Shed</th><th class="num">Total</th><th>Status</th><th>CRM</th></tr>
+    $('#qtable').innerHTML = res.data.length ? `<table class="tbl"><tr><th>Quote</th><th>Date</th><th>Customer</th><th>Shed</th><th>Dealer / tier</th><th class="num">Total</th><th>Status</th><th>CRM</th></tr>
       ${res.data.map(x => `<tr class="click" data-id="${x.id}"><td><b>${esc(x.number)}</b></td><td class="muted">${fmtDate(x.created_at)}</td>
       <td>${esc(x.customer.full_name)}<div class="muted" style="font-size:12.5px">${esc(x.customer.email)} ${x.customer.phone ? '· ' + esc(x.customer.phone) : ''}</div></td>
-      <td>${esc(x.shed.style)} <span class="muted">${esc(x.shed.size)}</span></td><td class="num"><b>${fmt(x.pricing.total)}</b></td>
+      <td>${esc(x.shed.style)} <span class="muted">${esc(x.shed.size)}</span></td>
+      <td>${x.dealer ? esc(x.dealer.name) : ''}<div class="muted" style="font-size:12.5px">${esc(x.pricing.tier || '')}${x.pricing.pricing_zip ? ' · ZIP ' + esc(x.pricing.pricing_zip) : ''}</div></td><td class="num"><b>${fmt(x.pricing.total)}</b></td>
       <td><span class="pill ${esc(x.status)}">${esc(x.status)}</span></td><td>${x.integrations.ghl_contact_id ? '<span class="pill on">GHL ✓</span>' : '<span class="muted">—</span>'}</td></tr>`).join('')}</table>`
       : '<div class="empty">No quotes found. Submit one from the configurator to see it here.</div>';
     $('#qcount').textContent = `${res.total} quote${res.total === 1 ? '' : 's'}`;
@@ -207,8 +208,8 @@ async function quotes(id) {
   $('#csv').onclick = guard(async e => {
     e.preventDefault();
     const res = await api('GET', '/api/v1/quotes?limit=500');
-    const rows = [['Quote', 'Date', 'Status', 'First', 'Last', 'Email', 'Phone', 'Address', 'City', 'State', 'ZIP', 'Style', 'Size', 'Options', 'Total', '3D link']];
-    for (const x of res.data) rows.push([x.number, x.created_at, x.status, x.customer.first_name, x.customer.last_name, x.customer.email, x.customer.phone, x.customer.address, x.customer.city, x.customer.state, x.customer.zip, x.shed.style, x.shed.size, x.options.map(o => o.name).join('; '), x.pricing.total, x.links.view_3d]);
+    const rows = [['Quote', 'Date', 'Status', 'First', 'Last', 'Email', 'Phone', 'Address', 'City', 'State', 'ZIP', 'Style', 'Size', 'Options', 'Dealer lot', 'Price tier', 'Total', '3D link']];
+    for (const x of res.data) rows.push([x.number, x.created_at, x.status, x.customer.first_name, x.customer.last_name, x.customer.email, x.customer.phone, x.customer.address, x.customer.city, x.customer.state, x.customer.zip, x.shed.style, x.shed.size, x.options.map(o => o.name).join('; '), x.dealer?.name || '', x.pricing.tier || '', x.pricing.total, x.links.view_3d]);
     const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     saveFile(new Blob([csv], { type: 'text/csv' }), 'shed-quotes.csv');
   });
@@ -235,6 +236,7 @@ async function quoteDetail(id, refresh) {
         <dt>Address</dt><dd>${esc([c.address, c.city, c.state, c.zip].filter(Boolean).join(', ')) || '—'}</dd>
         <dt>SMS consent</dt><dd>${c.sms_consent ? 'Yes' : 'No'}</dd><dt>Notes</dt><dd>${esc(c.notes) || '—'}</dd>
         <dt>Submitted</dt><dd>${fmtDate(x.created_at)}</dd><dt>Source</dt><dd>${esc(x.source) || '—'}</dd>
+        <dt>Dealer lot</dt><dd>${x.dealer ? esc(x.dealer.name) : '—'}</dd><dt>Price tier</dt><dd>${esc(x.pricing.tier || '—')}${x.pricing.pricing_zip ? ' (ZIP ' + esc(x.pricing.pricing_zip) + ')' : ''}</dd>
         <dt>GHL</dt><dd>${x.integrations.ghl_contact_id ? `Contact <code>${esc(x.integrations.ghl_contact_id)}</code>` : 'Not synced'}</dd>
       </dl></div>
       <div class="card card-pad" style="margin-top:14px;display:grid;gap:12px">
@@ -755,4 +757,141 @@ async function account() {
   $('#asave').onclick = guard(async () => { const d = Object.fromEntries(new FormData($('#af'))); await api('POST', '/api/admin/account', d); me = await api('GET', '/api/auth/me'); toast('Account updated'); account(); });
   $('#uadd').onclick = guard(async () => { await api('POST', '/api/admin/users', Object.fromEntries(new FormData($('#uf')))); toast('User added'); account(); });
   $('#main').onclick = guard(async e => { const b = e.target.closest('[data-del]'); if (b && confirmBox('Remove this user?')) { await api('DELETE', `/api/admin/users/${b.dataset.del}`); account(); } });
+}
+
+
+// ---------------------------------------------------------------------------
+// Price tiers, dealer lots and ZIP codes
+// ---------------------------------------------------------------------------
+function parseCSV(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => String(c).trim() !== ''));
+}
+const toCSV = rows => rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+const pickFile = accept => new Promise(res => { const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.onchange = () => res(i.files[0]); i.click(); });
+const readText = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsText(f); });
+const newId = () => 'lot' + Math.random().toString(36).slice(2, 8);
+
+/** Every priced item, for price sheets. */
+function priceRows() {
+  const rows = [];
+  for (const s of catalog.styles) for (const z of s.sizes) rows.push({ key: 'size:' + z.id, type: 'Size', name: `${s.name} ${z.width}' x ${z.depth}'`, unit: 'each', base: z.price });
+  for (const o of catalog.options) rows.push({ key: 'option:' + o.id, type: 'Option', name: o.name, unit: o.price_unit || 'each', base: o.price });
+  for (const c of catalog.colors) if (Number(c.price)) rows.push({ key: 'color:' + c.id, type: 'Color', name: `${c.category}: ${c.name}`, unit: 'each', base: c.price });
+  for (const r of roofingList({ settings })) rows.push({ key: 'roofing:' + r.key, type: 'Roofing', name: r.name, unit: r.price_unit, base: r.price });
+  return rows;
+}
+
+async function pricingPage() {
+  await loadCatalog();
+  settings = await api('GET', '/api/admin/settings');
+  let tiers = (settings.price_tiers || []).map(t => ({ ...t, overrides: { ...(t.overrides || {}) } }));
+  while (tiers.length < MAX_TIERS) tiers.push({ id: tiers.length + 1, name: `Tier ${tiers.length + 1}`, adjust_pct: 0, overrides: {} });
+  let dealers = (settings.dealers || []).map(d => ({ ...d }));
+  let zips = (settings.zip_tiers || []).map(z => ({ ...z }));
+  let mode = settings.pricing_mode || 'none', defTier = settings.default_tier || 1;
+  const origin = settings.public_url || location.origin.replace(/\/admin.*$/, '');
+  const tierOpts = sel => tiers.map(t => `<option value="${t.id}" ${String(t.id) === String(sel) ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+  const save = async (msg = 'Saved') => {
+    await api('PUT', '/api/admin/settings', { pricing_mode: mode, default_tier: Number(defTier), price_tiers: tiers, dealers, zip_tiers: zips });
+    settings = await api('GET', '/api/admin/settings'); toast(msg);
+  };
+
+  const render = () => {
+    const ovCount = t => Object.keys(t.overrides || {}).length;
+    $('#main').innerHTML = head('Price tiers & dealers', 'Set up to four price lists, then choose which one each dealer lot or ZIP code gets.', `<button class="btn primary" id="pSave">Save changes</button>`) + `
+    <div class="card card-pad" style="margin-bottom:16px"><h2>How customers are priced</h2>
+      <div class="row" style="gap:18px;margin:12px 0 6px">
+        ${[['none', 'Same price everywhere'], ['dealer', 'By dealer lot'], ['zip', 'By ZIP code']].map(([k, l]) => `<label class="chk"><input type="radio" name="pmode" value="${k}" ${mode === k ? 'checked' : ''}>${l}</label>`).join('')}
+      </div>
+      <p class="muted" style="margin:6px 0 12px">${mode === 'dealer' ? 'Customers pick their dealer lot in the builder (or you send them a lot-specific link below). Each lot uses its tier.' : mode === 'zip' ? 'Customers enter their delivery ZIP. The tier comes from the ZIP list below; unlisted ZIPs use the default tier.' : 'Everyone sees the default tier.'}</p>
+      <label class="fld" style="max-width:320px"><span>Default tier</span><select id="defTier">${tierOpts(defTier)}</select><small>Used before a customer picks a lot/ZIP, and for ZIPs not on your list.</small></label>
+    </div>
+
+    <div class="grid g4" style="margin-bottom:16px">${tiers.map((t, i) => `<div class="card card-pad tier">
+      <label class="fld"><span>Tier ${t.id} name</span><input data-t="${i}" data-k="name" value="${esc(t.name)}"></label>
+      <label class="fld"><span>Adjust all prices (%)</span><input type="number" step="0.5" data-t="${i}" data-k="adjust_pct" value="${t.adjust_pct ?? 0}"><small>e.g. 8 = 8% over standard. Uploaded prices override this.</small></label>
+      <label class="fld"><span>Delivery fee ($)</span><input type="number" step="1" data-t="${i}" data-k="delivery_fee" value="${t.delivery_fee ?? ''}" placeholder="Default ${settings.delivery_fee ?? 0}"></label>
+      <div class="muted" style="font-size:12.5px;margin:6px 0">${ovCount(t) ? `<b style="color:var(--ok)">${ovCount(t)} uploaded prices</b>` : 'No price sheet uploaded'}</div>
+      <div class="stack-sm"><button class="btn ghost sm block" data-dl="${i}">Download price sheet</button>
+      <button class="btn ghost sm block" data-ul="${i}">Upload price sheet</button>
+      ${ovCount(t) ? `<button class="btn link sm block" data-clr="${i}">Clear uploaded prices</button>` : ''}</div>
+    </div>`).join('')}</div>
+
+    <div class="card" style="margin-bottom:16px"><div class="card-pad row" style="justify-content:space-between;padding-bottom:6px"><div><h2>Dealer lots</h2><p class="muted" style="margin:0">Used when pricing is by dealer lot. Each lot also gets its own builder link that locks in its pricing.</p></div><button class="btn ghost sm" id="addDealer">+ Add dealer lot</button></div>
+      <div class="tbl-wrap"><table class="tbl"><tr><th>Lot name</th><th>Address</th><th>City</th><th>State</th><th>ZIP</th><th>Phone</th><th>Email</th><th>Tier</th><th></th></tr>
+      ${dealers.map((d, i) => `<tr>${['name', 'address', 'city', 'state', 'zip', 'phone', 'email'].map(k => `<td><input class="in" data-d="${i}" data-k="${k}" value="${esc(d[k] || '')}" style="min-width:${k === 'name' ? 190 : k === 'state' ? 54 : k === 'zip' ? 72 : 110}px"></td>`).join('')}
+        <td><select class="in" data-d="${i}" data-k="tier" style="min-width:130px">${tierOpts(d.tier)}</select></td>
+        <td style="white-space:nowrap"><button class="icon-btn" title="Copy this lot's builder link" data-link="${i}">${COPY}</button> <button class="icon-btn" data-deld="${i}">${TRASH}</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">No dealer lots yet.</td></tr>'}</table></div></div>
+
+    <div class="card"><div class="card-pad row" style="justify-content:space-between;padding-bottom:6px"><div><h2>ZIP codes</h2><p class="muted" style="margin:0">Used when pricing is by ZIP. Enter an exact ZIP (38301), a range (38300-38399) or a prefix (383). Exact beats range, range beats prefix.</p></div>
+      <div class="row"><button class="btn ghost sm" id="addZip">+ Add</button><button class="btn ghost sm" id="ulZip">Upload ZIP list</button><button class="btn ghost sm" id="dlZip">Download ZIP list</button></div></div>
+      <div class="card-pad" style="padding-top:6px"><div class="zipgrid">${zips.map((z, i) => `<div class="ziprow"><input class="in" data-z="${i}" data-k="match" value="${esc(z.match)}" placeholder="ZIP, range or prefix"><select class="in" data-z="${i}" data-k="tier">${tierOpts(z.tier)}</select><button class="icon-btn" data-delz="${i}">${TRASH}</button></div>`).join('') || '<p class="muted">No ZIP codes yet.</p>'}</div>
+      <label class="fld" style="margin-top:12px"><span>Paste ZIPs (one per line: <code>ZIP,tier number</code>)</span><textarea id="zipPaste" placeholder="38301,1&#10;38300-38399,2&#10;372,3"></textarea></label>
+      <button class="btn ghost sm" id="zipAddPaste" style="margin-top:8px">Add pasted ZIPs</button></div></div>`;
+  };
+  render();
+
+  const main = $('#main');
+  main.addEventListener('change', e => {
+    const t = e.target, d = t.dataset;
+    if (t.name === 'pmode') { mode = t.value; render(); }
+    else if (t.id === 'defTier') defTier = t.value;
+    else if (d.t !== undefined) { const v = t.value; tiers[d.t][d.k] = d.k === 'name' ? v : (v === '' ? (d.k === 'delivery_fee' ? null : 0) : Number(v)); }
+    else if (d.d !== undefined) dealers[d.d][d.k] = d.k === 'tier' ? Number(t.value) : t.value;
+    else if (d.z !== undefined) zips[d.z][d.k] = d.k === 'tier' ? Number(t.value) : t.value.trim();
+  });
+  main.addEventListener('click', guard(async e => {
+    const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+    if (b.id === 'pSave') return save('Pricing saved');
+    if (b.id === 'addDealer') { dealers.push({ id: newId(), name: 'New dealer lot', tier: Number(defTier) }); render(); }
+    if (d.deld !== undefined && confirmBox('Remove this dealer lot?')) { dealers.splice(+d.deld, 1); render(); }
+    if (d.link !== undefined) {
+      const dl = dealers[+d.link]; const url = `${(window.__configuratorUrl ? new URL(window.__configuratorUrl, location.href).href : origin + '/')}#dealer-${dl.id}`;
+      try { await navigator.clipboard.writeText(url); toast('Link copied: ' + url); } catch { prompt('Copy this link', url); }
+    }
+    if (b.id === 'addZip') { zips.push({ match: '', tier: Number(defTier) }); render(); }
+    if (d.delz !== undefined) { zips.splice(+d.delz, 1); render(); }
+    if (b.id === 'zipAddPaste') {
+      const lines = $('#zipPaste').value.split(/\n+/).map(l => l.split(/[,\t;]/).map(x => x.trim())).filter(r => r[0]);
+      for (const [m, t] of lines) zips.push({ match: m, tier: Number(t) || Number(defTier) });
+      toast(`Added ${lines.length} ZIP entr${lines.length === 1 ? 'y' : 'ies'}`); render();
+    }
+    if (b.id === 'dlZip') saveFile(new Blob([toCSV([['ZIP (exact, range or prefix)', 'Tier number'], ...zips.map(z => [z.match, z.tier])])], { type: 'text/csv' }), 'zip-price-tiers.csv');
+    if (b.id === 'ulZip') {
+      const f = await pickFile('.csv,text/csv,text/plain'); if (!f) return;
+      const rows = parseCSV(await readText(f)).filter(r => /\d/.test(r[0] || ''));
+      const add = rows.map(r => ({ match: String(r[0]).trim(), tier: Number(r[1]) || Number(defTier) }));
+      zips = zips.concat(add); toast(`Added ${add.length} ZIP entries — click Save changes`); render();
+    }
+    if (d.dl !== undefined) {
+      const t = tiers[+d.dl], rows = priceRows();
+      const csv = toCSV([['ID (do not change)', 'Type', 'Item', 'Price unit', 'Standard price', `${t.name} price`],
+        ...rows.map(r => [r.key, r.type, r.name, r.unit, r.base, t.overrides[r.key] ?? ''])]);
+      saveFile(new Blob([csv], { type: 'text/csv' }), `price-sheet-${t.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`);
+      toast('Fill in the last column (blank = use the % adjustment), then upload it.');
+    }
+    if (d.ul !== undefined) {
+      const f = await pickFile('.csv,text/csv'); if (!f) return;
+      const rows = parseCSV(await readText(f)); const known = new Set(priceRows().map(r => r.key));
+      const ov = {}; let n = 0, bad = 0;
+      for (const r of rows.slice(1)) {
+        const key = String(r[0] || '').trim(), v = String(r[5] ?? '').replace(/[$,\s]/g, '');
+        if (!known.has(key)) { if (key) bad++; continue; }
+        if (v !== '' && !isNaN(Number(v))) { ov[key] = Number(v); n++; }
+      }
+      tiers[+d.ul].overrides = ov; render();
+      toast(`${n} prices loaded for ${tiers[+d.ul].name}${bad ? ` (${bad} rows skipped — unknown ID)` : ''}. Click Save changes.`, !!bad && !n);
+    }
+    if (d.clr !== undefined && confirmBox('Clear the uploaded prices for this tier?')) { tiers[+d.clr].overrides = {}; render(); }
+  }));
 }

@@ -35,7 +35,8 @@ export function formatQuote(q, baseUrl, linkFor) {
       roofing, colors,
     },
     options,
-    pricing: { subtotal: p.subtotal, delivery: p.delivery, tax: p.tax, tax_rate: p.tax_rate, total: p.total },
+    pricing: { subtotal: p.subtotal, delivery: p.delivery, tax: p.tax, tax_rate: p.tax_rate, total: p.total, tier: q.price_tier || p.tier_name || null, pricing_zip: q.pricing_zip || p.zip || null },
+    dealer: q.dealer_name ? { id: q.dealer_id, name: q.dealer_name, ...(p.dealer || {}) } : null,
     summary,
     links: {
       view_3d: L.view3d ? L.view3d(q) : `${base}/?q=${q.token}`,

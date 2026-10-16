@@ -75,11 +75,12 @@ app.post('/api/v1/quotes', rateLimit(8, 60000), wrap(async (req, res) => {
   pricing.size = { width: size.width, depth: size.depth };
   const s = v => (v == null ? null : String(v).slice(0, 500));
   const token = crypto.randomBytes(16).toString('hex');
-  const r = run(`INSERT INTO quotes (token, first_name, last_name, email, phone, address, city, state, zip, notes, sms_consent, source, utm, config, pricing, total, style_name, size_label)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const r = run(`INSERT INTO quotes (token, first_name, last_name, email, phone, address, city, state, zip, notes, sms_consent, source, utm, config, pricing, total, style_name, size_label, dealer_id, dealer_name, price_tier, pricing_zip)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     token, s(customer.first_name), s(customer.last_name), s(customer.email)?.toLowerCase(), s(customer.phone), s(customer.address), s(customer.city),
     s(customer.state), s(customer.zip), s(customer.notes), customer.sms_consent ? 1 : 0, s(source || req.get('referer') || 'configurator'),
-    JSON.stringify(utm || {}), JSON.stringify(cfg), JSON.stringify(pricing), pricing.total, style.name, `${size.width}' x ${size.depth}'`);
+    JSON.stringify(utm || {}), JSON.stringify(cfg), JSON.stringify(pricing), pricing.total, style.name, `${size.width}' x ${size.depth}'`,
+    pricing.dealer ? String(pricing.dealer.id) : null, pricing.dealer?.name || null, pricing.tier_name || null, pricing.zip || null);
   const id = Number(r.lastInsertRowid);
   run('UPDATE quotes SET number = ? WHERE id = ?', 'Q-' + (10000 + id), id);
   const q = get('SELECT * FROM quotes WHERE id = ?', id);
@@ -120,6 +121,7 @@ v1.use(requireAuth);
 v1.get('/quotes', (req, res) => {
   const where = [], p = [];
   if (req.query.status) { where.push('status = ?'); p.push(req.query.status); }
+  if (req.query.dealer) { where.push('dealer_id = ?'); p.push(String(req.query.dealer)); }
   if (req.query.since) { where.push('created_at >= ?'); p.push(String(req.query.since).replace('T', ' ').replace('Z', '')); }
   if (req.query.q) { where.push("(first_name || ' ' || last_name LIKE ? OR email LIKE ? OR phone LIKE ? OR number LIKE ?)"); const l = `%${req.query.q}%`; p.push(l, l, l, l); }
   const w = where.length ? 'WHERE ' + where.join(' AND ') : '';

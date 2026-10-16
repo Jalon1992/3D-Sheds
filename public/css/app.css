@@ -122,6 +122,15 @@ h3:first-of-type { margin-top: 0; }
 .ic-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
 .link-danger { border: 0; background: none; color: #b42318; font-weight: 600; font-size: 13px; padding: 4px 0; }
 
+/* ---------- Location (dealer / ZIP pricing) ---------- */
+.locbar { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 18px; background: #fafbfa; }
+.locbar.need { border-color: var(--brand); background: var(--brand-soft); }
+.locbar label, .locbar > span { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); }
+.locbar b { font-size: 15px; }
+.locbar small { color: var(--ink-2); font-size: 12.5px; }
+.locbar select, .locbar input { width: 100%; border: 1px solid #d5dcd9; border-radius: 10px; padding: 10px 12px; font-size: 15px; background: #fff; color: var(--ink); }
+.ziprow { display: flex; gap: 8px; } .ziprow input { flex: 1; min-width: 0; }
+
 /* ---------- Step: style ---------- */
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .card { border: 1.5px solid var(--line); border-radius: var(--radius); background: #fff; padding: 0; text-align: left; overflow: hidden; transition: border-color .15s, box-shadow .15s; }

@@ -1,6 +1,6 @@
 // Customer-facing configurator: Style → Size → Colors → Options → Quote.
 import { ShedScene } from './shed3d.js';
-import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, roofChoices, roofColorsFor, roofMaterialPrice, roofingList } from './shared/pricing.js';
+import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList } from './shared/pricing.js';
 import { shedGeometry, findSpot, canPlace } from './shared/geometry.js';
 import { floorPlanSVG } from './shared/floorplan.js';
 
@@ -63,6 +63,49 @@ const curSize = () => curStyle()?.sizes.find(z => z.id === state.config.size_id)
 const geo = () => shedGeometry(curStyle(), curSize());
 const toast = (msg, ms = 2600) => { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms); };
 const newUid = () => 'u' + Date.now().toString(36) + (uidSeq++);
+
+// ---------------------------------------------------------------------------
+// Location-based pricing (dealer lot or ZIP → price tier)
+// ---------------------------------------------------------------------------
+const LOC_KEY = 'shedbuilder-location';
+const mode = () => (state.base?.settings?.pricing_mode || 'none');
+function applyTier() {
+  const tier = resolveTier(state.base, { dealer_id: state.config?.dealer_id, zip: state.config?.zip });
+  state.catalog = tierCatalog(state.base, tier);
+  optById = Object.fromEntries(state.catalog.options.map(o => [o.id, o]));
+}
+function saveLoc() { try { localStorage.setItem(LOC_KEY, JSON.stringify({ dealer_id: state.config.dealer_id || null, zip: state.config.zip || null })); } catch { /* ignore */ } }
+function setLocation(patch) {
+  if ('dealer_id' in patch) { if (patch.dealer_id) state.config.dealer_id = patch.dealer_id; else delete state.config.dealer_id; }
+  if ('zip' in patch) { if (/^\d{5}$/.test(patch.zip || '')) state.config.zip = patch.zip; else delete state.config.zip; }
+  saveLoc(); applyTier(); rebuild(); renderPanel();
+}
+function renderLoc() {
+  const m = mode();
+  if (m === 'dealer') {
+    const dealers = state.base.settings.dealers || [];
+    const cur = findDealer(state.base, state.config.dealer_id);
+    if (state.lockDealer && cur) return `<div class="locbar"><span>Pricing for</span><b>${esc(cur.name)}</b>${cur.city ? `<small>${esc(cur.city)}${cur.state ? ', ' + esc(cur.state) : ''}</small>` : ''}</div>`;
+    return `<div class="locbar ${cur ? '' : 'need'}"><label for="dealerSel">Your dealer lot</label>
+      <select id="dealerSel"><option value="">${cur ? '' : 'Choose your nearest lot…'}</option>${dealers.map(d => `<option value="${esc(d.id)}" ${String(d.id) === String(state.config.dealer_id) ? 'selected' : ''}>${esc(d.name)}${d.city ? ' — ' + esc(d.city) + (d.state ? ', ' + esc(d.state) : '') : ''}</option>`).join('')}</select>
+      ${cur ? '' : '<small>Prices are for your local lot. Choose one to see your price.</small>'}</div>`;
+  }
+  if (m === 'zip') {
+    const z = state.config.zip || '';
+    return `<div class="locbar ${z ? '' : 'need'}"><label for="zipIn">Delivery ZIP code</label>
+      <div class="ziprow"><input id="zipIn" inputmode="numeric" autocomplete="postal-code" maxlength="5" placeholder="e.g. 38301" value="${esc(z)}"><button type="button" class="btn ghost sm" data-zipgo>${z ? 'Update' : 'See my price'}</button></div>
+      <small>${z ? `Showing prices for ${esc(z)}.` : 'Prices vary by area. Enter your ZIP to see your price.'}</small></div>`;
+  }
+  return '';
+}
+$('#panel').addEventListener('change', e => { if (e.target.id === 'dealerSel') setLocation({ dealer_id: e.target.value }); });
+$('#panel').addEventListener('keydown', e => { if (e.target.id === 'zipIn' && e.key === 'Enter') { e.preventDefault(); setLocation({ zip: e.target.value.trim() }); } });
+$('#panel').addEventListener('input', e => {
+  // On the quote form, the delivery ZIP also sets the price tier in ZIP mode
+  if (mode() === 'zip' && e.target.name === 'zip' && e.target.closest('#qform')) {
+    const v = e.target.value.trim(); if (/^\d{5}$/.test(v) && v !== state.config.zip) setLocation({ zip: v });
+  }
+});
 
 function pricing() { try { return priceConfig(state.catalog, state.config); } catch { return null; } }
 function rebuild() {
@@ -300,11 +343,19 @@ function renderPanel() {
   $('#back').style.visibility = state.step === 0 ? 'hidden' : 'visible';
   $('#next').textContent = state.step === 4 ? 'Get my quote' : `Next: ${STEPS[state.step + 1]?.label}`;
   $('#next').hidden = !!(state.step === 4 && state.submitted);
-  if (key === 'style') el.innerHTML = renderStyle();
-  if (key === 'size') el.innerHTML = renderSize();
-  if (key === 'colors') el.innerHTML = renderColors();
-  if (key === 'options') el.innerHTML = renderOptions();
-  if (key === 'quote') el.innerHTML = state.submitted ? renderDone() : renderQuote();
+  const keep = {}; const f0 = el.querySelector('#qform');
+  if (f0) for (const i of f0.elements) if (i.name) keep[i.name] = i.type === 'checkbox' ? i.checked : i.value;
+  const loc = state.submitted ? '' : renderLoc();
+  if (key === 'style') el.innerHTML = loc + renderStyle();
+  if (key === 'size') el.innerHTML = loc + renderSize();
+  if (key === 'colors') el.innerHTML = loc + renderColors();
+  if (key === 'options') el.innerHTML = loc + renderOptions();
+  if (key === 'quote') el.innerHTML = state.submitted ? renderDone() : loc + renderQuote();
+  const f1 = el.querySelector('#qform');
+  if (f1) {
+    for (const [k, v] of Object.entries(keep)) { const i = f1.elements[k]; if (i) i.type === 'checkbox' ? (i.checked = v) : (i.value = v); }
+    if (mode() === 'zip' && state.config.zip && !f1.elements.zip.value) f1.elements.zip.value = state.config.zip;
+  }
   renderTotal();
 }
 
@@ -396,7 +447,8 @@ function renderQuote() {
   <div class="lines">${lines.map(l => `<div class="line"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall && WALLS.includes(l.wall) ? `<small>${esc(l.wall)} wall</small>` : ''}</div><div class="${l.amount < 0 ? 'neg' : ''}">${sp ? (l.note === 'Standard' ? 'Included' : fmt(l.amount)) : ''}</div></div>`).join('')}
   ${sp && p.delivery ? `<div class="line"><div>Delivery</div><div>${fmt(p.delivery)}</div></div>` : ''}
   ${sp && p.tax ? `<div class="line"><div>Tax (${p.tax_rate}%)</div><div>${fmt(p.tax)}</div></div>` : ''}
-  ${sp ? `<div class="line tot"><div>Total</div><div>${fmt(p.total)}</div></div>` : ''}</div>
+  ${sp ? `<div class="line tot"><div>Total</div><div>${fmt(p.total)}</div></div>` : ''}
+  ${p.dealer ? `<div class="line"><div><small>Dealer lot</small>${esc(p.dealer.name)}</div><div></div></div>` : ''}</div>
   <form class="form" id="qform" novalidate>
     <div class="field"><label>First name *</label><input name="first_name" autocomplete="given-name" required></div>
     <div class="field"><label>Last name</label><input name="last_name" autocomplete="family-name"></div>
@@ -430,7 +482,9 @@ $('#panel').addEventListener('click', e => {
     const old = curSize(); const st = state.catalog.styles.find(s => s.id === id);
     const near = st.sizes.reduce((a, z) => (Math.abs(z.width * z.depth - old.width * old.depth) < Math.abs(a.width * a.depth - old.width * old.depth) ? z : a), st.sizes[0]);
     const keepColors = state.config.colors, keepRoof = state.config.roof_material;
+    const keepLoc = { dealer_id: state.config.dealer_id, zip: state.config.zip };
     state.config = defaultConfig(state.catalog, id, near.id);
+    for (const [k, v] of Object.entries(keepLoc)) if (v) state.config[k] = v;
     if (state.maxStep >= 2) {
       state.config.colors = { ...keepColors };
       if (roofChoices(state.catalog, st).some(r => r.key === keepRoof)) state.config.roof_material = keepRoof;
@@ -454,6 +508,7 @@ $('#panel').addEventListener('click', e => {
     const list = state.config.items.filter(i => i.option_id === Number(d.dec));
     const nonStd = list.filter(i => !i.standard_of); removeItem((nonStd.at(-1) || list.at(-1)).uid);
   } else if (d.sel) { selectItem(d.sel); const it = state.config.items.find(i => i.uid === d.sel); if (it && WALLS.includes(it.wall)) showWall(it.wall); }
+  else if (d.zipgo !== undefined) setLocation({ zip: ($('#zipIn')?.value || '').trim() });
   else if (d.dl === 'glb') downloadGLB();
   else if (d.dl === 'plan') openPlan();
   else if (d.dl === 'link') { navigator.clipboard?.writeText(`${location.origin}/?q=${state.submitted.token}`); toast('Link copied'); }
@@ -471,6 +526,12 @@ async function submitQuote() {
   if (miss.length || !/^\S+@\S+\.\S+$/.test(data.email || '')) {
     err.textContent = miss.length ? 'Please fill in the required fields.' : 'Please enter a valid email.'; err.hidden = false;
     (f.querySelector(`[name=${miss[0] || 'email'}]`))?.focus(); return;
+  }
+  if (mode() === 'dealer' && !findDealer(state.base, state.config.dealer_id)) {
+    err.textContent = 'Please choose your dealer lot at the top so we can price your shed.'; err.hidden = false; $('#dealerSel')?.focus(); return;
+  }
+  if (mode() === 'zip' && !state.config.zip) {
+    err.textContent = 'Please enter your 5-digit delivery ZIP code.'; err.hidden = false; f.querySelector('[name=zip]')?.focus(); return;
   }
   const btn = $('#next'); btn.disabled = true; btn.textContent = 'Sending…';
   const utm = {}; for (const [k, v] of params) if (k.startsWith('utm_') || k === 'gclid' || k === 'fbclid') utm[k] = v;
@@ -530,11 +591,16 @@ $('#views').onclick = e => {
 // ---------------------------------------------------------------------------
 async function boot() {
   if (params.get('embed') === '1') document.body.classList.add('embed');
-  const r = await fetch('/api/v1/catalog'); state.catalog = await r.json();
-  const cat = state.catalog;
+  const r = await fetch('/api/v1/catalog'); state.base = await r.json(); state.catalog = state.base;
+  const cat = state.base;
   if (!cat.styles.length) { $('#panel').innerHTML = '<h2>Coming soon</h2><p class="sub">No shed styles have been published yet. Add some in the admin.</p>'; $('#loading').classList.add('gone'); return; }
   optById = Object.fromEntries(cat.options.map(o => [o.id, o]));
   const st = cat.settings || {};
+  // Location: ?dealer=ID or #dealer-ID locks the dealer (one link per lot); otherwise remember the last choice
+  let savedLoc = {}; try { savedLoc = JSON.parse(localStorage.getItem(LOC_KEY) || '{}') || {}; } catch { /* ignore */ }
+  const urlDealer = params.get('dealer') || (location.hash.match(/^#dealer-([A-Za-z0-9._~-]+)$/) || [])[1];
+  if (urlDealer && findDealer(cat, urlDealer)) { savedLoc.dealer_id = findDealer(cat, urlDealer).id; state.lockDealer = true; }
+  if (params.get('zip')) savedLoc.zip = params.get('zip');
   if (st.brand_color) document.documentElement.style.setProperty('--brand', st.brand_color);
   $('#company').textContent = st.company_name || 'Shed Builder';
   document.title = `${st.company_name ? st.company_name + ' — ' : ''}Design your shed in 3D`;
@@ -569,6 +635,9 @@ async function boot() {
     fitItems(false);
     if (params.get('style')) { state.step = 1; state.maxStep = 1; }
   }
+  if (savedLoc.dealer_id && !state.config.dealer_id && findDealer(cat, savedLoc.dealer_id)) state.config.dealer_id = findDealer(cat, savedLoc.dealer_id).id;
+  if (savedLoc.zip && !state.config.zip && /^\d{5}$/.test(savedLoc.zip)) state.config.zip = savedLoc.zip;
+  applyTier();
   rebuild();
   if (params.has('debug')) window.__shed = { scene, state };
   renderSteps(); renderPanel();

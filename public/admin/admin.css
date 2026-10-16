@@ -166,3 +166,9 @@ pre.snip { background: #0f1715; color: #d3eadf; padding: 14px; border-radius: 10
 
 .roofinfo { background: var(--brand-soft); border-radius: 8px; padding: 9px 12px; font-size: 13px; color: #1f4a36; }
 .roofinfo span { white-space: nowrap; }
+
+.tier { display: grid; gap: 10px; align-content: start; }
+.stack-sm { display: grid; gap: 6px; }
+.zipgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+.zipgrid .ziprow { display: flex; gap: 6px; align-items: center; }
+.zipgrid .ziprow input { flex: 1; min-width: 0; } .zipgrid .ziprow select { width: 120px; }

@@ -108,6 +108,19 @@ Every option has a category, price, size and a **placement**:
 
 ---
 
+## Price tiers, dealer lots & ZIP pricing
+
+Admin → **Price tiers & dealers**.
+
+- **Pricing mode:** *Same price everywhere*, *By dealer lot*, or *By ZIP code*. Switch any time.
+- **Four tiers.** Each tier has a name, an **adjust all prices %** (e.g. +8%), an optional **delivery fee**, and an optional **price sheet**:
+  1. Click **Download price sheet** on a tier. It's a CSV listing every size, option, upcharged color and roofing type with its standard price.
+  2. Fill in the last column with that tier's price (leave blank to use the % adjustment). Don't change the ID column.
+  3. **Upload price sheet**, then **Save changes**.
+- **Dealer lots:** add each lot (name, address, contact) and pick its tier. Customers choose their lot at the top of the builder. The copy button gives each lot its own builder link (`…/#dealer-lot1` or `?dealer=lot1`) that locks in that lot's pricing — use it on each lot's page or in GHL funnels.
+- **ZIP codes:** assign tiers to exact ZIPs (`38301`), ranges (`38300-38399`) or prefixes (`383`). Add them one by one, paste a list (`ZIP,tier`), or upload a CSV. Exact beats range, range beats prefix; unlisted ZIPs use the **default tier**. Customers enter their ZIP at the top of the builder (or in the quote form).
+- Prices are always recalculated on the server for the chosen lot/ZIP. Each quote stores the **dealer lot** and **price tier**; both appear in the admin, CSV export, webhooks (`dealer`, `pricing.tier`) and GoHighLevel (a `dealer: Lot name` tag, the note, and flat fields `dealer_name` / `price_tier`). The quotes API can filter by `?dealer=lot1`.
+
 ## GoHighLevel
 
 Admin → **Integrations & API → GoHighLevel**. Use either option, or both.

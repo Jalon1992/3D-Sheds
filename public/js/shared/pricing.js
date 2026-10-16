@@ -9,6 +9,55 @@ export const DEFAULT_ROOFING = [
   { key: 'shingle', name: 'Architectural Shingles', description: '30-year dimensional asphalt shingles.', price: 0, price_unit: 'per_roof_sqft', active: true },
   { key: 'metal', name: 'Ag Panel Metal', description: '29-ga ribbed steel panels, 40-year paint.', price: 0.85, price_unit: 'per_roof_sqft', active: true },
 ];
+// ---------------------------------------------------------------------------
+// Price tiers (up to 4). Pricing mode decides how a customer's tier is chosen:
+//   none   – everyone gets the default tier
+//   dealer – the tier of the dealer lot the customer picks
+//   zip    – the tier assigned to the customer's ZIP (exact, range "38300-38399" or prefix "383")
+// A tier = { id, name, adjust_pct, delivery_fee?, overrides: { 'size:12': 3999, 'option:5': 300,
+//           'color:8': 150, 'roofing:metal': 0.95 } }. Overrides win; anything else gets adjust_pct.
+// ---------------------------------------------------------------------------
+export const MAX_TIERS = 4;
+export function findDealer(catalog, id) {
+  return (catalog.settings?.dealers || []).find(d => String(d.id) === String(id)) || null;
+}
+export function zipTierId(entries, zip) {
+  if (!/^\d{5}$/.test(String(zip || ''))) return null;
+  const z = String(zip); let best = null, bestLen = -1;
+  for (const e of entries || []) {
+    const m = String(e.match || '').trim();
+    if (m === z) return e.tier;
+    const r = m.match(/^(\d{5})\s*-\s*(\d{5})$/);
+    if (r && z >= r[1] && z <= r[2] && bestLen < 5) { best = e.tier; bestLen = 4.5; }
+    else if (/^\d{1,4}$/.test(m) && z.startsWith(m) && m.length > bestLen) { best = e.tier; bestLen = m.length; }
+  }
+  return best;
+}
+export function resolveTier(catalog, config = {}) {
+  const st = catalog.settings || {};
+  const tiers = Array.isArray(st.price_tiers) ? st.price_tiers : [];
+  if (!tiers.length) return null;
+  let id = null, dealer = null;
+  if (st.pricing_mode === 'dealer') { dealer = findDealer(catalog, config.dealer_id); id = dealer?.tier ?? null; }
+  else if (st.pricing_mode === 'zip') id = zipTierId(st.zip_tiers, config.zip);
+  const tier = tiers.find(t => String(t.id) === String(id ?? st.default_tier ?? 1)) || tiers[0];
+  return { ...tier, dealer };
+}
+const r2 = n => Math.round(n * 100) / 100;
+/** A copy of the catalog with every price set for one tier. */
+export function tierCatalog(catalog, tier) {
+  if (!tier) return { ...catalog, _tiered: true, _tier: null };
+  const pct = 1 + (Number(tier.adjust_pct) || 0) / 100, ov = tier.overrides || {};
+  const has = k => ov[k] !== undefined && ov[k] !== null && ov[k] !== '';
+  const adj = (base, key, whole) => has(key) ? Number(ov[key]) : (pct === 1 ? base : (whole ? Math.round((Number(base) || 0) * pct) : r2((Number(base) || 0) * pct)));
+  const styles = catalog.styles.map(s => ({ ...s, sizes: s.sizes.map(z => ({ ...z, price: adj(z.price, 'size:' + z.id, true) })) }));
+  const options = catalog.options.map(o => ({ ...o, price: adj(o.price, 'option:' + o.id, !o.price_unit || o.price_unit === 'each') }));
+  const colors = catalog.colors.map(c => ({ ...c, price: adj(c.price, 'color:' + c.id, true) }));
+  const settings = { ...catalog.settings, roofing: roofingList(catalog).map(r => ({ ...r, price: adj(r.price, 'roofing:' + r.key, r.price_unit === 'each') })) };
+  if (tier.delivery_fee !== undefined && tier.delivery_fee !== null && tier.delivery_fee !== '') settings.delivery_fee = Number(tier.delivery_fee);
+  return { ...catalog, styles, options, colors, settings, _tiered: true, _tier: tier };
+}
+
 /** Color groups customers can pick from (each can be switched off in Settings). */
 export const COLOR_GROUPS = [['siding', 'Siding'], ['trim', 'Trim'], ['roof', 'Roof'], ['door', 'Doors'], ['window', 'Windows']];
 export function colorGroupEnabled(catalog, key) {
@@ -99,6 +148,8 @@ export function defaultConfig(catalog, styleId, sizeId) {
  * charges only the difference (never a credit). Removing a standard option gives no credit.
  */
 export function priceConfig(catalog, config) {
+  if (!catalog._tiered) catalog = tierCatalog(catalog, resolveTier(catalog, config));
+  const tier = catalog._tier;
   const settings = catalog.settings || {};
   const style = catalog.styles.find(s => s.id === config.style_id);
   if (!style) throw new Error('Unknown style');
@@ -168,7 +219,11 @@ export function priceConfig(catalog, config) {
   const taxRate = Number(settings.tax_rate) || 0;
   const tax = round2((subtotal + (settings.tax_delivery ? delivery : 0)) * taxRate / 100);
   const total = round2(subtotal + delivery + tax);
-  return { lines, subtotal, delivery, tax, tax_rate: taxRate, total, style, size };
+  const dealer = settings.pricing_mode === 'dealer' ? findDealer(catalog, config.dealer_id) : null;
+  return { lines, subtotal, delivery, tax, tax_rate: taxRate, total, style, size,
+    tier_id: tier?.id ?? null, tier_name: tier?.name ?? null,
+    dealer: dealer ? { id: dealer.id, name: dealer.name, city: dealer.city, state: dealer.state, phone: dealer.phone, email: dealer.email } : null,
+    zip: settings.pricing_mode === 'zip' ? (config.zip || null) : null };
 }
 
 /** Validate/sanitise a config coming from an untrusted client. */
@@ -203,7 +258,10 @@ export function sanitizeConfig(catalog, raw) {
   // Standard slots must actually be standard for this style
   const std = new Set((style.standard_options || []).map(s => s.option_id));
   for (const it of items) if (it.standard_of && !std.has(it.standard_of)) it.standard_of = null;
-  return { style_id: style.id, size_id: size.id, roof_material, colors, items };
+  const out = { style_id: style.id, size_id: size.id, roof_material, colors, items };
+  if (findDealer(catalog, raw.dealer_id)) out.dealer_id = findDealer(catalog, raw.dealer_id).id;
+  if (/^\d{5}$/.test(String(raw.zip || ''))) out.zip = String(raw.zip);
+  return out;
 }
 
 /** World-space centre of a wall-mounted item (x, z) in feet. Front wall faces +z. */

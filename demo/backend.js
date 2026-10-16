@@ -9,7 +9,7 @@ import { formatQuote } from '../public/js/shared/quote-format.js';
 const KEY = 'shedbuilder-demo-v1';
 const PUBLIC = ['company_name', 'logo_url', 'brand_color', 'currency_symbol', 'tax_rate', 'tax_delivery', 'delivery_fee', 'show_prices',
   'success_message', 'consent_text', 'phone', 'website', 'privacy_url', 'require_phone', 'headline', 'thank_you_url', 'roofing',
-  'downgrade_credit', 'remove_credit', 'color_groups'];
+  'downgrade_credit', 'remove_credit', 'color_groups', 'pricing_mode', 'price_tiers', 'default_tier', 'dealers', 'zip_tiers'];
 const JSONISH = { styles: ['standard_options', 'default_colors', 'roof_choices'], webhooks: ['events', 'headers'] };
 
 // ---- storage -----------------------------------------------------------------
@@ -60,6 +60,7 @@ function createQuote(config, customer, source) {
     id, number: 'Q-' + (10000 + id - 1000), token: tok(), status: 'new', ...customer, sms_consent: customer.sms_consent ? 1 : 0,
     source: source || 'configurator', utm: {}, config: cfg, pricing, total: pricing.total, style_name: style.name,
     size_label: `${size.width}' x ${size.depth}'`, created_at: now(), updated_at: now(), internal_notes: '',
+    dealer_id: pricing.dealer ? String(pricing.dealer.id) : null, dealer_name: pricing.dealer?.name || null, price_tier: pricing.tier_name || null, pricing_zip: pricing.zip || null,
   };
   db.quotes.unshift(q); save(); return q;
 }
@@ -99,8 +100,8 @@ on('POST', /^\/api\/v1\/quotes$/, (m, b) => {
   catch (e) { return err(e.message); }
 });
 on('GET', /^\/api\/v1\/quotes$/, (m, b, url) => {
-  const qs = url.searchParams, s = (qs.get('q') || '').toLowerCase(), st = qs.get('status');
-  const rows = db.quotes.filter(q => (!st || q.status === st) && (!s || [q.first_name, q.last_name, q.email, q.phone, q.number].join(' ').toLowerCase().includes(s)));
+  const qs = url.searchParams, s = (qs.get('q') || '').toLowerCase(), st = qs.get('status'), dl = qs.get('dealer');
+  const rows = db.quotes.filter(q => (!st || q.status === st) && (!dl || q.dealer_id === dl) && (!s || [q.first_name, q.last_name, q.email, q.phone, q.number].join(' ').toLowerCase().includes(s)));
   return json({ total: rows.length, data: rows.map(fmt) });
 });
 on('GET', /^\/api\/v1\/quotes\/(\d+)$/, m => { const q = db.quotes.find(x => x.id === +m[1]); return q ? json({ ...fmt(q), internal_notes: q.internal_notes, pricing_lines: q.pricing.lines }) : err('Not found', 404); });

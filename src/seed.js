@@ -27,6 +27,20 @@ export function seed() {
     });
   }
   if (getSettings().roofing === undefined) setSettings({ roofing: DEFAULT_ROOFING });
+  if (getSettings().price_tiers === undefined) setSettings({
+    pricing_mode: 'none', default_tier: 1,
+    price_tiers: [
+      { id: 1, name: 'Standard', adjust_pct: 0, overrides: {} },
+      { id: 2, name: 'Tier 2', adjust_pct: 5, overrides: {} },
+      { id: 3, name: 'Tier 3', adjust_pct: 10, overrides: {} },
+      { id: 4, name: 'Tier 4', adjust_pct: 15, overrides: {} },
+    ],
+    dealers: [
+      { id: 'lot1', name: 'Sample Lot – Main Street', address: '100 Main St', city: 'Example City', state: 'TN', zip: '38301', phone: '', email: '', tier: 1 },
+      { id: 'lot2', name: 'Sample Lot – Highway 45', address: '2000 Hwy 45', city: 'Sample Town', state: 'TN', zip: '38330', phone: '', email: '', tier: 2 },
+    ],
+    zip_tiers: [],
+  });
   if (getSettings().color_groups === undefined) setSettings({ color_groups: { siding: true, trim: true, roof: true, door: true, window: true } });
   if (getSettings().downgrade_credit === undefined) setSettings({ downgrade_credit: true, remove_credit: true });
 
