@@ -116,7 +116,7 @@ export function seed() {
   }, [[10, 8], [12, 8], [10, 10], [12, 10], [14, 10], [16, 12]], 48, 1800);
   style({
     name: 'Garage', description: 'Tall walls and a roll-up door for mowers, ATVs and workshops.', roof_type: 'gable', ridge_axis: 'depth',
-    wall_height: 8, roof_pitch: 5, overhang: 0.75, siding_type: 'lp_smartside', roof_material: 'metal', sort: 3,
+    wall_height: 8, roof_pitch: 5, overhang: 0.75, roof_edge: 'board_drip', siding_type: 'lp_smartside', roof_material: 'metal', sort: 3,
     default_colors: { siding: C['Pewter:siding'], trim: C['White:trim'], roof: C['Galvalume:roof'], door: C['Match Trim:door'] },
     standard_options: [{ option_id: O.roll8, wall: 'front', offset: 0 }, { option_id: O.door36, wall: 'right', offset: 2 }, { option_id: O.win23, wall: 'left', offset: 0 }],
   }, [[10, 12], [10, 16], [12, 16], [12, 20], [12, 24], [14, 24]], 42, 2400);

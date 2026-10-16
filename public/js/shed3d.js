@@ -760,8 +760,13 @@ export class ShedScene {
     const fasciaH = inch(style.fascia_size, 5.5), cornerW = inch(style.corner_trim, 5);
     const metalRoofSel = (config.roof_material || style.roof_material) === 'metal';
     // Shingle roofs: rake board (trim color). Metal roofs: metal rake trim (roof color) with its own sizes.
-    const rakeH = metalRoofSel ? inch(style.metal_rake_size, 5.5) : inch(style.rake_size, 5.5);
-    const rakeLeg = inch(style.metal_rake_leg, 3.5);
+    // Roof edge style:
+    //  metal_rake  – wide metal rake trim in the roof color (metal roofs) / rake board (shingles), fascia below
+    //  board_drip  – rake board + fascia in the trim color, capped by a thin metal rake edge and a drip edge
+    const boardDrip = style.roof_edge === 'board_drip';
+    const rakeH = boardDrip ? inch(style.rake_size, 5.5) : metalRoofSel ? inch(style.metal_rake_size, 5.5) : inch(style.rake_size, 5.5);
+    const rakeLeg = inch(style.metal_rake_leg, boardDrip ? 2 : 3.5);
+    const capH = inch(style.rake_cap_size, 1.5), dripH = inch(style.drip_edge_size, 1.5);
 
     // --- Corner boards
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -804,6 +809,11 @@ export class ShedScene {
     for (let i = 0; i < nSeg; i++) {
       const B0 = prof[i], B1 = prof[i + 1];
       let T0 = top[i], T1 = top[i + 1];
+      if (boardDrip) { // roofing runs ~1" past the drip edge
+        const [ux, uy] = dirOf(T0, T1), kx = Math.max(Math.abs(ux), 0.3);
+        if (i === 0) { const e = (T0[0] - (Math.min(top[0][0], prof[0][0]) - rt - 0.03 - 0.08)) / kx; T0 = [T0[0] - ux * e, T0[1] - uy * e]; }
+        if (i === nSeg - 1) { const e = ((Math.max(top[nSeg][0], prof[nSeg][0]) + rt + 0.03 + 0.08) - T1[0]) / kx; T1 = [T1[0] + ux * e, T1[1] + uy * e]; }
+      }
       // solid slab (trim colour on edges/underside) – top sunk a hair below the textured skin
       const n = normal(i), e = 0.006;
       const shape = new THREE.Shape([V2(B0), V2(B1), V2([T1[0] - n[0] * e, T1[1] - n[1] * e]), V2([T0[0] - n[0] * e, T0[1] - n[1] * e])]);
@@ -852,25 +862,54 @@ export class ShedScene {
     const atX = (p, q, x) => { const t = (x - p[0]) / ((q[0] - p[0]) || 1e-6); return [x, p[1] + (q[1] - p[1]) * t]; };
     const plumb = line => { const l = line.map(p => p.slice()); l[0] = atX(l[0], l[1], XL); l[nSeg] = atX(l[nSeg - 1], l[nSeg], XR); return l; };
 
-    // Rake trim along both gable ends (L-shaped metal trim on metal roofs, rake board on shingles)
-    const rakeTop = plumb(offLine(th + (metalRoof ? ct + 0.04 : ct + 0.02))), rakeBot = plumb(offLine(th - rakeH));
-    for (const zs of [1, -1]) {
-      const rakeMat = metalRoof ? M.roofTrim : M.trim;
-      const face = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, rakeBot), { depth: rt, bevelEnabled: false }), rakeMat);
-      face.position.z = zs > 0 ? RL : -RL - rt; face.castShadow = true; face.userData.solid = true; roofG.add(face);
-      if (metalRoof) {
-        const legW = Math.max(0.05, rakeLeg); // leg that laps onto the roof panels
-        const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, plumb(offLine(th + 0.004))), { depth: legW, bevelEnabled: false }), rakeMat);
-        leg.position.z = zs > 0 ? RL - legW : -RL; leg.castShadow = true; leg.userData.solid = true; roofG.add(leg);
+    const edgeMat = style.drip_edge_color === 'trim' ? M.trim : M.roofTrim;
+    if (boardDrip) {
+      const dT = 0.03; // metal thickness
+      const XL2 = XL - dT, XR2 = XR + dT;
+      const plumb2 = line => { const l = line.map(p => p.slice()); l[0] = atX(l[0], l[1], XL2); l[nSeg] = atX(l[nSeg - 1], l[nSeg], XR2); return l; };
+      // Rake board (trim color, LP texture): top flush with the roof deck
+      const boardTop = plumb(offLine(th - 0.004)), boardBot = plumb(offLine(th - rakeH));
+      const capTop = plumb2(offLine(th + ct + 0.03)), capBot = plumb2(offLine(th - capH));
+      for (const zs of [1, -1]) {
+        const board = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(boardTop, boardBot), { depth: rt, bevelEnabled: false }), M.trim);
+        board.position.z = zs > 0 ? RL : -RL - rt; board.castShadow = true; board.userData.solid = true; roofG.add(board);
+        // thin metal rake edge over the top of the board, with a leg onto the roofing
+        const cap = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(capTop, capBot), { depth: dT, bevelEnabled: false }), edgeMat);
+        cap.position.z = zs > 0 ? RL + rt : -RL - rt - dT; cap.castShadow = true; cap.userData.solid = true; roofG.add(cap);
+        const legW = Math.max(0.04, rakeLeg);
+        const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(capTop, plumb2(offLine(th + 0.004))), { depth: legW, bevelEnabled: false }), edgeMat);
+        leg.position.z = zs > 0 ? RL + rt + dT - legW : -RL - rt - dT; leg.castShadow = true; leg.userData.solid = true; roofG.add(leg);
       }
-    }
-    // Fascia boards along the eaves: top meets the plumb-cut rake exactly, ends run through the rake thickness
-    for (const end of [0, nSeg]) {
-      const left = end === 0, X = left ? XL : XR;
-      const yt = rakeTop[end][1];
-      // metal: rake trim (roof color) wraps over the fascia ends; shingles: fascia runs through the rake board
-      const f = box(rt, fasciaH, metalRoof ? ridgeLen : ridgeLen + 2 * rt, M.trim, X + (left ? rt / 2 : -rt / 2), yt - fasciaH / 2, 0, roofG);
-      f.userData.solid = true;
+      // Fascia (trim color) + drip edge (metal) along the eaves
+      const deck = plumb(offLine(th));
+      for (const end of [0, nSeg]) {
+        const left = end === 0, X = left ? XL : XR, yt = deck[end][1] - 0.004;
+        const f = box(rt, fasciaH, ridgeLen + 2 * rt, M.trim, X + (left ? rt / 2 : -rt / 2), yt - fasciaH / 2, 0, roofG); f.userData.solid = true;
+        const d = box(dT, dripH, ridgeLen + 2 * rt + 2 * dT, edgeMat, X + (left ? -dT / 2 : dT / 2), yt + 0.03 - dripH / 2, 0, roofG); d.userData.solid = true;
+        // small kick at the bottom of the drip edge
+        const kick = box(dT * 2.5, dT, ridgeLen + 2 * rt + 2 * dT, edgeMat, X + (left ? -dT * 1.25 : dT * 1.25), yt + 0.03 - dripH + dT / 2, 0, roofG); kick.userData.solid = true;
+      }
+    } else {
+      // Rake trim along both gable ends (L-shaped metal trim on metal roofs, rake board on shingles)
+      const rakeTop = plumb(offLine(th + (metalRoof ? ct + 0.04 : ct + 0.02))), rakeBot = plumb(offLine(th - rakeH));
+      for (const zs of [1, -1]) {
+        const rakeMat = metalRoof ? M.roofTrim : M.trim;
+        const face = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, rakeBot), { depth: rt, bevelEnabled: false }), rakeMat);
+        face.position.z = zs > 0 ? RL : -RL - rt; face.castShadow = true; face.userData.solid = true; roofG.add(face);
+        if (metalRoof) {
+          const legW = Math.max(0.05, rakeLeg); // leg that laps onto the roof panels
+          const leg = new THREE.Mesh(new THREE.ExtrudeGeometry(strip(rakeTop, plumb(offLine(th + 0.004))), { depth: legW, bevelEnabled: false }), rakeMat);
+          leg.position.z = zs > 0 ? RL - legW : -RL; leg.castShadow = true; leg.userData.solid = true; roofG.add(leg);
+        }
+      }
+      // Fascia boards along the eaves: top meets the plumb-cut rake exactly
+      for (const end of [0, nSeg]) {
+        const left = end === 0, X = left ? XL : XR;
+        const yt = rakeTop[end][1];
+        // metal: rake trim (roof color) wraps over the fascia ends; shingles: fascia runs through the rake board
+        const f = box(rt, fasciaH, metalRoof ? ridgeLen : ridgeLen + 2 * rt, M.trim, X + (left ? rt / 2 : -rt / 2), yt - fasciaH / 2, 0, roofG);
+        f.userData.solid = true;
+      }
     }
 
     // --- Items

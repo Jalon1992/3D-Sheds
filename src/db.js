@@ -93,6 +93,10 @@ for (const sql of [
   `ALTER TABLE styles ADD COLUMN trim_type TEXT DEFAULT 'lp'`,
   'ALTER TABLE styles ADD COLUMN gambrel_lower_len REAL',
   'ALTER TABLE styles ADD COLUMN roof_pitch_back REAL',
+  `ALTER TABLE styles ADD COLUMN roof_edge TEXT DEFAULT 'metal_rake'`,
+  'ALTER TABLE styles ADD COLUMN rake_cap_size REAL',
+  'ALTER TABLE styles ADD COLUMN drip_edge_size REAL',
+  `ALTER TABLE styles ADD COLUMN drip_edge_color TEXT DEFAULT 'roof'`,
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------
