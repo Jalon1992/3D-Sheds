@@ -41,6 +41,7 @@ export function seed() {
     ],
     zip_tiers: [],
   });
+  if (getSettings().quote_terms === undefined) setSettings({ customer_pdf: true, quote_terms: 'Prices valid for 30 days. Delivery subject to level site and clear access. Final price confirmed at order.' });
   if (getSettings().color_groups === undefined) setSettings({ color_groups: { siding: true, trim: true, roof: true, door: true, window: true } });
   if (getSettings().downgrade_credit === undefined) setSettings({ downgrade_credit: true, remove_credit: true });
 

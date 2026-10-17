@@ -9,7 +9,7 @@ import { formatQuote } from '../public/js/shared/quote-format.js';
 const KEY = 'shedbuilder-demo-v1';
 const PUBLIC = ['company_name', 'logo_url', 'brand_color', 'currency_symbol', 'tax_rate', 'tax_delivery', 'delivery_fee', 'show_prices',
   'success_message', 'consent_text', 'phone', 'website', 'privacy_url', 'require_phone', 'headline', 'thank_you_url', 'roofing',
-  'downgrade_credit', 'remove_credit', 'color_groups', 'pricing_mode', 'price_tiers', 'default_tier', 'dealers', 'zip_tiers'];
+  'downgrade_credit', 'remove_credit', 'color_groups', 'pricing_mode', 'price_tiers', 'default_tier', 'dealers', 'zip_tiers', 'customer_pdf', 'quote_terms'];
 const JSONISH = { styles: ['standard_options', 'default_colors', 'roof_choices'], webhooks: ['events', 'headers'] };
 
 // ---- storage -----------------------------------------------------------------

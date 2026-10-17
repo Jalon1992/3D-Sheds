@@ -1385,7 +1385,7 @@
    "logo_url": "",
    "brand_color": "#2f6b4f",
    "currency_symbol": "$",
-   "tax_rate": 0,
+   "tax_rate": 9.75,
    "tax_delivery": false,
    "delivery_fee": 0,
    "show_prices": true,
@@ -1423,7 +1423,7 @@
     "door": true,
     "window": true
    },
-   "pricing_mode": "none",
+   "pricing_mode": "dealer",
    "price_tiers": [
     {
      "id": 1,
@@ -1435,7 +1435,8 @@
      "id": 2,
      "name": "Tier 2",
      "adjust_pct": 5,
-     "overrides": {}
+     "overrides": {},
+     "delivery_fee": 150
     },
     {
      "id": 3,
@@ -1475,7 +1476,9 @@
      "tier": 2
     }
    ],
-   "zip_tiers": []
+   "zip_tiers": [],
+   "customer_pdf": true,
+   "quote_terms": "Prices valid for 30 days. Delivery subject to level site and clear access. Final price confirmed at order."
   }
  },
  "settings": {
@@ -1484,7 +1487,7 @@
   "logo_url": "",
   "brand_color": "#2f6b4f",
   "currency_symbol": "$",
-  "tax_rate": 0,
+  "tax_rate": 9.75,
   "tax_delivery": false,
   "delivery_fee": 0,
   "show_prices": true,
@@ -1512,7 +1515,7 @@
     "active": true
    }
   ],
-  "pricing_mode": "none",
+  "pricing_mode": "dealer",
   "default_tier": 1,
   "price_tiers": [
    {
@@ -1525,7 +1528,8 @@
     "id": 2,
     "name": "Tier 2",
     "adjust_pct": 5,
-    "overrides": {}
+    "overrides": {},
+    "delivery_fee": 150
    },
    {
     "id": 3,
@@ -1565,6 +1569,8 @@
    }
   ],
   "zip_tiers": [],
+  "customer_pdf": true,
+  "quote_terms": "Prices valid for 30 days. Delivery subject to level site and clear access. Final price confirmed at order.",
   "color_groups": {
    "siding": true,
    "trim": true,

@@ -206,7 +206,7 @@ async function quotes(id) {
       <td>${esc(x.shed.style)} <span class="muted">${esc(x.shed.size)}</span></td>
       <td>${x.dealer ? esc(x.dealer.name) : ''}<div class="muted" style="font-size:12.5px">${esc(x.pricing.tier || '')}${x.pricing.pricing_zip ? ' · ZIP ' + esc(x.pricing.pricing_zip) : ''}</div></td><td class="num"><b>${fmt(x.pricing.total)}</b></td>
       <td><span class="pill ${esc(x.status)}">${esc(x.status)}</span></td><td>${x.integrations.ghl_contact_id ? '<span class="pill on">GHL ✓</span>' : '<span class="muted">—</span>'}</td>
-      <td class="num"><button class="btn ghost sm" data-draw="${x.id}" title="Floor plan + elevations in one PDF">Drawings PDF</button></td></tr>`).join('')}</table>`
+      <td class="num" style="white-space:nowrap">${canEditQuotes() ? `<button class="btn ghost sm" data-qpdf="${x.id}" title="Prices + drawings in one PDF">Quote PDF</button> ` : ''}<button class="btn ghost sm" data-draw="${x.id}" title="Floor plan + elevations, no prices">Drawings PDF</button></td></tr>`).join('')}</table>`
       : '<div class="empty">No quotes found. Submit one from the configurator to see it here.</div>';
     $('#qcount').textContent = `${res.total} quote${res.total === 1 ? '' : 's'}`;
   };
@@ -218,6 +218,7 @@ async function quotes(id) {
   $('#qst').onchange = render;
   $('#qtable').onclick = e => {
     const d = e.target.closest('[data-draw]'); if (d) { e.stopPropagation(); return downloadDrawings(Number(d.dataset.draw), d); }
+    const qp = e.target.closest('[data-qpdf]'); if (qp) { e.stopPropagation(); return downloadDrawings(Number(qp.dataset.qpdf), qp, true); }
     const tr = e.target.closest('tr[data-id]'); if (tr) quoteDetail(Number(tr.dataset.id), render);
   };
   $('#csv').onclick = guard(async e => {
@@ -231,14 +232,14 @@ async function quotes(id) {
   await render();
   if (id) quoteDetail(Number(id), render);
 }
-async function downloadDrawings(id, btn) {
+async function downloadDrawings(id, btn, withPricing = false) {
   const label = btn?.textContent;
   try {
     if (btn) { btn.disabled = true; btn.textContent = 'Building PDF…'; }
     const [x, cat] = await Promise.all([api('GET', `/api/v1/quotes/${id}`), catalog ? Promise.resolve(catalog) : loadCatalog()]);
-    const blob = await buildDrawingPackage(cat, x, { company: settings.company_name || '' });
-    saveFile(blob, `${x.number}-drawings.pdf`);
-    toast('Drawings PDF ready');
+    const blob = await buildDrawingPackage(cat, x, { company: settings.company_name || '', withPricing, showTier: withPricing, terms: settings.quote_terms || '', money: fmt });
+    saveFile(blob, `${x.number}-${withPricing ? 'quote' : 'drawings'}.pdf`);
+    toast(withPricing ? 'Quote PDF ready' : 'Drawings PDF ready');
   } catch (e) { toast(e.message, true); }
   finally { if (btn) { btn.disabled = false; btn.textContent = label; } }
 }
@@ -251,7 +252,8 @@ async function quoteDetail(id, refresh) {
       <div class="row" style="margin-bottom:14px"><a class="btn ghost sm" target="_blank" href="${esc(x.links.view_3d)}">Open in 3D ↗</a>
         <a class="btn ghost sm" target="_blank" href="${esc(x.links.download_3d_model)}">Download 3D model (.glb)</a>
         <button class="btn ghost sm" id="qPlanDl">Download floor plan</button>
-        <button class="btn primary sm" id="qDraw">Download drawings (PDF)</button></div>
+        ${canEditQuotes() ? '<button class="btn primary sm" id="qQuotePdf">Quote PDF (prices + drawings)</button>' : ''}
+        <button class="btn ${canEditQuotes() ? 'ghost' : 'primary'} sm" id="qDraw">Drawings PDF (no prices)</button></div>
       <div class="plan-prev"><img src="${planUrl(x.id)}" alt="Floor plan"></div>
       <h3 style="margin:18px 0 6px">Line items</h3><div class="lines">${x.pricing_lines.map(l => `<div class="ln"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall ? `<small>${esc(l.wall)}</small>` : ''}</div><div>${fmt(l.amount)}</div></div>`).join('')}
       ${x.pricing.delivery ? `<div class="ln"><div>Delivery</div><div>${fmt(x.pricing.delivery)}</div></div>` : ''}${x.pricing.tax ? `<div class="ln"><div>Tax</div><div>${fmt(x.pricing.tax)}</div></div>` : ''}
@@ -279,6 +281,7 @@ async function quoteDetail(id, refresh) {
         saveFile(new Blob([await r.text()], { type: 'image/svg+xml' }), `${x.number}-floor-plan.svg`);
       });
       $('#qDraw', root).onclick = () => downloadDrawings(x.id, $('#qDraw', root));
+      if ($('#qQuotePdf', root)) $('#qQuotePdf', root).onclick = () => downloadDrawings(x.id, $('#qQuotePdf', root), true);
       if ($('#qSave', root)) $('#qSave', root).onclick = guard(async () => { await api('PATCH', `/api/v1/quotes/${id}`, { status: $('#qStatus').value, internal_notes: $('#qNotes').value }); toast('Saved'); refresh && refresh(); });
       if ($('#qResend', root)) $('#qResend', root).onclick = guard(async () => { await api('POST', `/api/v1/quotes/${id}/resend`); toast('Queued — check Integrations → Delivery log'); });
       if ($('#qDel', root)) $('#qDel', root).onclick = guard(async () => { if (!confirmBox('Delete this quote permanently?')) return; await api('DELETE', `/api/v1/quotes/${id}`); closeModal(); refresh && refresh(); toast('Deleted'); });
@@ -749,6 +752,8 @@ const SETTINGS_FIELDS = [
   { key: 'consent_text', label: 'SMS / call consent text (A2P)', type: 'textarea', full: true, help: 'Leave blank to hide the checkbox.' },
   { key: 'privacy_url', label: 'Privacy policy URL' }, { key: 'thank_you_url', label: 'Thank-you page URL (optional redirect)' },
   { key: 'success_message', label: 'Success message', type: 'textarea', full: true },
+  { key: 'customer_pdf', label: 'Let customers download their quote PDF (prices + drawings) after submitting', type: 'checkbox', full: true },
+  { key: 'quote_terms', label: 'Terms printed on the quote PDF', type: 'textarea', full: true, ph: 'e.g. Prices valid for 30 days. Delivery subject to site access. A 10% deposit is required to order.' },
   { type: 'section', label: 'Advanced' },
   { key: 'public_url', label: 'Public URL of this app', full: true, ph: 'https://builder.yourdomain.com', help: 'Used for links in webhooks/GHL. Leave blank to auto-detect.' },
 ];

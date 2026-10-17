@@ -3,6 +3,7 @@ import { ShedScene } from './shed3d.js';
 import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList } from './shared/pricing.js';
 import { shedGeometry, findSpot, canPlace } from './shared/geometry.js';
 import { floorPlanSVG } from './shared/floorplan.js';
+import { buildDrawingPackage } from './drawings.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -469,6 +470,7 @@ function renderDone() {
     <div class="qn">Quote ${esc(q.number)}${showPrices() ? ' · ' + fmt(q.pricing.total) : ''}</div>
     <div class="stack">
       <button class="btn ghost block" data-dl="glb"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></svg>Download 3D model (.glb)</button>
+      ${S().customer_pdf !== false ? `<button class="btn primary block" data-dl="quotepdf"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6m0 6-3-3m3 3 3-3"/></svg>Download quote PDF</button>` : ''}
       <button class="btn ghost block" data-dl="plan"><svg viewBox="0 0 24 24"><path d="M3 3h18v18H3zM3 12h7M14 3v7M14 14v7"/></svg>View / print floor plan</button>
       <button class="btn ghost block" data-dl="link"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Copy link to my design</button>
     </div></div>`;
@@ -510,6 +512,7 @@ $('#panel').addEventListener('click', e => {
   } else if (d.sel) { selectItem(d.sel); const it = state.config.items.find(i => i.uid === d.sel); if (it && WALLS.includes(it.wall)) showWall(it.wall); }
   else if (d.zipgo !== undefined) setLocation({ zip: ($('#zipIn')?.value || '').trim() });
   else if (d.dl === 'glb') downloadGLB();
+  else if (d.dl === 'quotepdf') downloadQuotePDF(b);
   else if (d.dl === 'plan') openPlan();
   else if (d.dl === 'link') { navigator.clipboard?.writeText(`${location.origin}/?q=${state.submitted.token}`); toast('Link copied'); }
 });
@@ -555,6 +558,18 @@ async function submitQuote() {
 // ---------------------------------------------------------------------------
 function fileBase() { const q = state.submitted; const st = curStyle(), z = curSize(); return (q ? q.number + '-' : '') + `${st.name}-${z.width}x${z.depth}`.replace(/[^a-z0-9-]+/gi, '-'); }
 function saveBlob(blob, name) { if (window.__shedSave) return window.__shedSave(blob, name); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+async function downloadQuotePDF(btn) {
+  const q = state.submitted; if (!q) return;
+  const label = btn.innerHTML; btn.disabled = true; btn.textContent = 'Building your PDF…';
+  try {
+    const p = pricing();
+    const quote = { ...q, config: state.config, pricing_lines: p.lines, pricing: { ...q.pricing, tax_rate: p.tax_rate },
+      created_at: new Date().toISOString().replace('T', ' ').slice(0, 19), dealer: p.dealer || q.dealer || null };
+    const blob = await buildDrawingPackage(state.catalog, quote, { company: S().company_name || '', withPricing: true, terms: S().quote_terms || '', money: fmt });
+    saveBlob(blob, `${q.number}-quote.pdf`); toast('Quote PDF downloaded');
+  } catch (e) { console.error(e); toast('Could not build the PDF'); }
+  finally { btn.disabled = false; btn.innerHTML = label; }
+}
 async function downloadGLB() {
   toast('Preparing 3D model…');
   try { saveBlob(await scene.exportGLB(), fileBase() + '.glb'); toast('3D model downloaded (.glb)'); }

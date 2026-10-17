@@ -30,7 +30,8 @@ const inline = (html, cssFile, js, extraCss, title) => html
   .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
 
 mkdirSync('demo/dist', { recursive: true });
-const builder = inline(readFileSync('public/index.html', 'utf8'), 'public/css/app.css', await bundle('demo/entry.js'),
+const pdfTags = '<script src="/vendor/pdf/jspdf.umd.min.js"></script><script src="/vendor/pdf/svg2pdf.umd.min.js"></script>';
+const builder = inline(readFileSync('public/index.html', 'utf8').replace('<script type="module"', pdfTags + '\n<script type="module"'), 'public/css/app.css', await bundle('demo/entry.js'),
   bannerCss + `\nbody:has(.demo-banner) .layout{height:calc(100dvh - var(--top-h) - 31px)}`, 'Shed Builder Demo');
 const admin = inline(readFileSync('public/admin/index.html', 'utf8'), 'public/admin/admin.css', await bundle('demo/admin-entry.js'), bannerCss, 'Shed Builder Admin Demo');
 writeFileSync('demo/dist/shed-builder-demo.html', builder);

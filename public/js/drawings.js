@@ -4,6 +4,18 @@ import { ShedScene } from './shed3d.js';
 import { floorPlanSVG } from './shared/floorplan.js';
 import { elevationSVG } from './shared/elevations.js';
 
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); }); }
+async function loadPdfLibs() {
+  if (!window.jspdf) await loadScript('/vendor/pdf/jspdf.umd.min.js');
+  if (!window.jspdf?.jsPDF?.API?.svg) await loadScript('/vendor/pdf/svg2pdf.umd.min.js');
+}
+// Helvetica (WinAnsi) lacks some glyphs — map them to safe equivalents.
+const pdfSafe = v => String(v ?? '').replace(/\u2212/g, '-').replace(/\u00d7/g, 'x').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/\u2013|\u2014/g, '-');
+function patchText(doc) {
+  const orig = doc.text.bind(doc);
+  doc.text = (t, ...a) => orig(Array.isArray(t) ? t.map(pdfSafe) : pdfSafe(t), ...a);
+}
+function fmtDay(s) { const d = s ? new Date(String(s).replace(' ', 'T') + (String(s).includes('Z') ? '' : 'Z')) : new Date(); return isNaN(d) ? new Date().toLocaleDateString('en-US') : d.toLocaleDateString('en-US'); }
 const PAGE = { w: 792, h: 612, m: 32 };      // US Letter landscape, points
 const INK = [29, 38, 36], MUTED = [125, 136, 133];
 
@@ -54,17 +66,19 @@ async function render3D(catalog, config) {
  * @param quote   formatted quote (as returned by GET /api/v1/quotes/:id) incl. config + pricing_lines
  * @returns Blob (application/pdf)
  */
-export async function buildDrawingPackage(catalog, quote, { company = '' } = {}) {
+export async function buildDrawingPackage(catalog, quote, { company = '', withPricing = false, terms = '', showTier = false, money = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) } = {}) {
+  await loadPdfLibs();
   const { jsPDF } = window.jspdf || {};
   if (!jsPDF) throw new Error('PDF library failed to load');
   const config = quote.config;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+  patchText(doc);
   const meta = {
     company, quote: `Quote ${quote.number}`, customer: quote.customer?.full_name || '',
     shed: `${quote.shed.style} ${quote.shed.size}${quote.shed.roofing ? ' · ' + quote.shed.roofing : ''}`,
     date: new Date().toLocaleDateString('en-US'),
   };
-  const total = 4;
+  const total = withPricing ? 5 : 4;
   const { w, h, m } = PAGE, area = { x: m, y: m, w: w - 2 * m, h: h - 2 * m - 46 };
 
   // 1 — cover: 3D view + spec sheet
@@ -90,14 +104,71 @@ export async function buildDrawingPackage(catalog, quote, { company = '' } = {})
     const lines = doc.splitTextToSize(`• ${o.name}${o.wall ? ` — ${o.wall} wall` : ''}${o.note === 'Standard' ? ' (standard)' : ''}`, colW);
     doc.text(lines, x, y); y += 11.5 * lines.length;
   }
+  if (withPricing && quote.pricing) {
+    const by = area.y + Math.min(imgH, area.h) + 18;
+    doc.setFillColor(243, 245, 244); doc.roundedRect(area.x, by, imgW, 34, 4, 4, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...MUTED);
+    doc.text('Quoted price (incl. delivery & tax) - itemized on sheet 2', area.x + 12, by + 21);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...INK);
+    doc.text(money(quote.pricing.total), area.x + imgW - 12, by + 22, { align: 'right' });
+  }
   frame(doc, meta, '3D VIEW & SPECIFICATIONS', 1, total);
 
-  // 2 — floor plan
+  // 2 — pricing (quote) sheet
+  let sheet = 2;
+  if (withPricing) {
+    doc.addPage();
+    let py = area.y + 8;
+    doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(`Quote ${quote.number}`, area.x, py + 8);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...MUTED);
+    doc.text(`Prepared ${fmtDay(quote.created_at)}${quote.dealer ? ' · ' + quote.dealer.name : ''}${showTier && quote.pricing?.tier ? ' · Price tier: ' + quote.pricing.tier : ''}`, area.x, py + 24);
+    // customer block on the right
+    const c = quote.customer || {};
+    doc.setTextColor(...INK); doc.setFontSize(10);
+    const who = [c.full_name, c.email, c.phone, [c.address, c.city, c.state, c.zip].filter(Boolean).join(', ')].filter(Boolean);
+    doc.text(who, area.x + area.w, py + 8, { align: 'right' });
+    py += Math.max(52, 8 + who.length * 11.5 + 24);
+    // table
+    const colAmt = area.x + area.w, colNote = area.x + area.w * 0.56;
+    doc.setFillColor(243, 245, 244); doc.rect(area.x, py - 12, area.w, 18, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...MUTED);
+    doc.text('ITEM', area.x + 6, py); doc.text('DETAIL', colNote, py); doc.text('PRICE', colAmt - 6, py, { align: 'right' });
+    py += 18; doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    const lines = quote.pricing_lines || [];
+    const maxY = area.y + area.h - 70;
+    for (const l of lines) {
+      if (l.type === 'color' && !l.amount) continue;
+      if (py > maxY) { doc.text('… continued in your online quote', area.x + 6, py); break; }
+      doc.setTextColor(...INK);
+      const name = doc.splitTextToSize(String(l.label), colNote - area.x - 14);
+      doc.text(name, area.x + 6, py);
+      doc.setTextColor(...MUTED); doc.setFontSize(9);
+      const det = [l.note, l.wall ? `${l.wall} wall` : ''].filter(Boolean).join(' · ');
+      if (det) doc.text(doc.splitTextToSize(det, colAmt - colNote - 80), colNote, py);
+      doc.setFontSize(10); doc.setTextColor(...(l.amount < 0 ? [6, 118, 71] : INK));
+      doc.text(l.note === 'Standard' ? 'Included' : money(l.amount), colAmt - 6, py, { align: 'right' });
+      py += 13 * Math.max(1, name.length) + 3;
+      doc.setDrawColor(228, 232, 230); doc.setLineWidth(0.4); doc.line(area.x, py - 9, area.x + area.w, py - 9);
+    }
+    // totals
+    py += 6; const tx = area.x + area.w * 0.6;
+    const tot = [['Subtotal', quote.pricing.subtotal], ...(quote.pricing.delivery ? [['Delivery', quote.pricing.delivery]] : []), ...(quote.pricing.tax ? [[`Tax (${quote.pricing.tax_rate}%)`, quote.pricing.tax]] : [])];
+    doc.setTextColor(...INK);
+    for (const [k, v] of tot) { doc.text(k, tx, py); doc.text(money(v), colAmt - 6, py, { align: 'right' }); py += 15; }
+    doc.setDrawColor(...INK); doc.setLineWidth(0.8); doc.line(tx, py - 9, area.x + area.w, py - 9);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('Total', tx, py + 6); doc.text(money(quote.pricing.total), colAmt - 6, py + 6, { align: 'right' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...MUTED);
+    if (terms) doc.text(doc.splitTextToSize(terms, area.w * 0.55), area.x, area.y + area.h - 40);
+    frame(doc, meta, 'QUOTE & PRICING', sheet, total);
+    sheet++;
+  }
+
+  // floor plan
   doc.addPage();
   await placeSVG(doc, floorPlanSVG(catalog, config, { customer: quote.customer, quote_number: quote.number }), area);
-  frame(doc, meta, 'FLOOR PLAN', 2, total);
+  frame(doc, meta, 'FLOOR PLAN', sheet, total); sheet++;
 
-  // 3, 4 — elevations, two per sheet at the same scale
+  // elevations, two per sheet at the same scale
   const pairs = [['front', 'back'], ['left', 'right']];
   for (const [i, pair] of pairs.entries()) {
     doc.addPage();
@@ -109,7 +180,7 @@ export async function buildDrawingPackage(catalog, quote, { company = '' } = {})
       const bw = e.width * scale, bh = e.height * scale;
       await placeSVG(doc, e.svg, { x: area.x + k * (half.w + 16) + (half.w - bw) / 2, y: area.y + (half.h - bh) / 2, w: bw, h: bh });
     }
-    frame(doc, meta, `${pair[0].toUpperCase()} & ${pair[1].toUpperCase()} ELEVATIONS`, 3 + i, total);
+    frame(doc, meta, `${pair[0].toUpperCase()} & ${pair[1].toUpperCase()} ELEVATIONS`, sheet + i, total);
   }
   return doc.output('blob');
 }

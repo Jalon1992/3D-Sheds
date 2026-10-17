@@ -141,6 +141,10 @@ Sales and Production users can be limited to **one dealer lot** — they then on
 
 Elevations are drawn to scale from the same geometry as the 3D model: siding, trim, roof profile and overhangs, every door/window/vent with its size, wall height and overall height.
 
+**Quote PDF (prices + drawings)** — Admin and Sales also get a **Quote PDF** button. It is the same package with a **Quote & pricing** sheet added as sheet 2: customer contact, dealer lot, price tier, every line item (base shed, roofing, upgrades with "Upgrade from …", standard items marked *Included*, credits for removed standard items), subtotal, delivery, tax and total. The cover sheet also shows the total. Production only sees the Drawings PDF, which has no prices.
+
+Customers can download their own Quote PDF from the thank-you screen after submitting. It does not show the tier name. You can turn this off in **Settings** ("Let customers download their quote PDF"), and the **Terms printed on the quote PDF** setting controls the fine print.
+
 ## GoHighLevel
 
 Admin → **Integrations & API → GoHighLevel**. Use either option, or both.

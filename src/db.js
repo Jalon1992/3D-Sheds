@@ -137,7 +137,7 @@ export function setSettings(obj) {
 export const PUBLIC_SETTINGS = ['company_name', 'logo_url', 'brand_color', 'currency_symbol', 'tax_rate', 'tax_delivery',
   'delivery_fee', 'show_prices', 'success_message', 'consent_text', 'phone', 'website', 'privacy_url', 'require_phone',
   'headline', 'thank_you_url', 'roofing', 'downgrade_credit', 'remove_credit', 'color_groups',
-  'pricing_mode', 'price_tiers', 'default_tier', 'dealers', 'zip_tiers'];
+  'pricing_mode', 'price_tiers', 'default_tier', 'dealers', 'zip_tiers', 'customer_pdf', 'quote_terms'];
 
 // ---- Catalog (what the configurator needs) ----------------------------------
 export function getCatalog({ includeInactive = false } = {}) {
