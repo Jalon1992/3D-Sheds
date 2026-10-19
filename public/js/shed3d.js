@@ -6,7 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { shedGeometry, resolvePlacement, FLOOR_Y, WALL_T } from './shared/geometry.js';
+import { shedGeometry, resolvePlacement, FLOOR_Y, WALL_T, rakeTailLevel } from './shared/geometry.js';
 
 const T = WALL_T;
 
@@ -847,8 +847,9 @@ export class ShedScene {
       const dark = M.roofPlain.clone(); dark.color = dark.color.clone().multiplyScalar(0.82);
       const exp = 5 / 12, cnt = Math.ceil(ridgeLen / exp);
       for (let k = 0; k < cnt; k++) {
-        const z = -RL + exp * (k + 0.5), lenZ = Math.min(exp + 0.03, RL - z + exp / 2);
-        const b = box(len, ct, lenZ, k % 2 ? M.roofPlain : dark, P[0] + ux * len / 2 + n[0] * ct / 2, P[1] + uy * len / 2 + n[1] * ct / 2, z, roofG);
+        // each cap shingle stays within the roof length (none sticks out past the rake)
+        const z0 = -RL + exp * k, z1 = Math.min(RL - 0.005, z0 + exp + 0.03), lenZ = z1 - z0; if (lenZ <= 0.01) continue;
+        const b = box(len, ct, lenZ, k % 2 ? M.roofPlain : dark, P[0] + ux * len / 2 + n[0] * ct / 2, P[1] + uy * len / 2 + n[1] * ct / 2, (z0 + z1) / 2, roofG);
         b.rotation.z = Math.atan2(uy, ux); b.userData.solid = true;
       }
     };
@@ -909,7 +910,7 @@ export class ShedScene {
       const boardTop = plumb(offLine(th - 0.004)), boardBot = plumb(offLine(th - rakeH));
       const capTop = plumb2(offLine(th + ct + 0.03)), capBot = plumb2(offLine(th - capH));
       const deck0 = plumb(offLine(th));
-      const fbL = deck0[0][1] - 0.004 - fasciaH, fbR = deck0[nSeg][1] - 0.004 - fasciaH; // fascia bottoms
+      const lvl = rakeTailLevel(style), fbL = lvl ? deck0[0][1] - 0.004 - fasciaH : null, fbR = lvl ? deck0[nSeg][1] - 0.004 - fasciaH : null; // fascia bottoms (flat cut)
       for (const zs of [1, -1]) {
         const board = new THREE.Mesh(new THREE.ExtrudeGeometry(cutStrip(boardTop, boardBot, fbL, fbR), { depth: rt, bevelEnabled: false }), M.trim);
         board.position.z = zs > 0 ? RL : -RL - rt; board.castShadow = true; board.userData.solid = true; roofG.add(board);
@@ -934,7 +935,7 @@ export class ShedScene {
     } else {
       // Rake trim along both gable ends (L-shaped metal trim on metal roofs, rake board on shingles)
       const rakeTop = plumb(offLine(th + (metalRoof ? ct + 0.04 : ct + 0.02))), rakeBot = plumb(offLine(th - rakeH));
-      const fbL = rakeTop[0][1] - fasciaH, fbR = rakeTop[nSeg][1] - fasciaH; // fascia bottoms
+      const lvl = rakeTailLevel(style), fbL = lvl ? rakeTop[0][1] - fasciaH : null, fbR = lvl ? rakeTop[nSeg][1] - fasciaH : null; // fascia bottoms (flat cut)
       for (const zs of [1, -1]) {
         const rakeMat = metalRoof ? M.roofTrim : M.trim;
         const face = new THREE.Mesh(new THREE.ExtrudeGeometry(cutStrip(rakeTop, rakeBot, fbL, fbR), { depth: rt, bevelEnabled: false }), rakeMat);

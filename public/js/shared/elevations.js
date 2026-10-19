@@ -1,6 +1,6 @@
 // To-scale exterior elevations (front / right / back / left) as standalone SVG strings.
 // Built from the same geometry as the 3D model, so openings, pitches and overhangs match exactly.
-import { shedGeometry, resolvePlacement, FLOOR_Y } from './geometry.js';
+import { shedGeometry, resolvePlacement, FLOOR_Y, rakeTailLevel } from './geometry.js';
 import { roofingList } from './pricing.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -84,7 +84,7 @@ export function elevationSVG(catalog, config, wall, opts = {}) {
     });
     const cutEnd = (line, end, prev, edge) => {
       const yCut = edge[1] + th - fasciaH, b = line[end], a = line[prev];
-      if (b[1] >= yCut || a[1] <= yCut) return [b, [edge[0], b[1]]];
+      if (!rakeTailLevel(style) || b[1] >= yCut || a[1] <= yCut) return [b, [edge[0], b[1]]];
       const t = (yCut - b[1]) / (a[1] - b[1]);
       return [[b[0] + (a[0] - b[0]) * t, yCut], [edge[0], yCut]];
     };

@@ -145,7 +145,8 @@ for (const t of TABLES) {
 }
 on('PUT', /^\/api\/admin\/styles\/(\d+)\/sizes$/, (m, b) => {
   const sid = +m[1];
-  const next = (b || []).filter(z => +z.width && +z.depth).map((z, i) => ({ id: z.id || nextId(), style_id: sid, width: +z.width, depth: +z.depth, price: +z.price || 0, active: z.active === false || z.active === 0 ? 0 : 1, sort: i }));
+  const len = v => (+v > 0 ? +v : null);
+  const next = (b || []).filter(z => +z.width && +z.depth).map((z, i) => ({ id: z.id || nextId(), style_id: sid, width: +z.width, depth: +z.depth, price: +z.price || 0, active: z.active === false || z.active === 0 || z.active === '0' ? 0 : 1, sort: i, hip_len: len(z.hip_len), upper_len: len(z.upper_len) }));
   db.sizes = db.sizes.filter(z => z.style_id !== sid).concat(next); save(); return json(next);
 });
 on('POST', /^\/api\/admin\/duplicate\/(styles|options|colors)\/(\d+)$/, m => {

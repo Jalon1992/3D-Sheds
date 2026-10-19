@@ -105,6 +105,10 @@ for (const sql of [
   'ALTER TABLE quotes ADD COLUMN pricing_zip TEXT',
   'ALTER TABLE styles ADD COLUMN available_options TEXT',
   `ALTER TABLE options ADD COLUMN gable_mode TEXT DEFAULT ''`,
+  'ALTER TABLE styles ADD COLUMN gambrel_upper_len REAL',
+  'ALTER TABLE styles ADD COLUMN rake_tail TEXT',
+  'ALTER TABLE sizes ADD COLUMN hip_len REAL',
+  'ALTER TABLE sizes ADD COLUMN upper_len REAL',
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------

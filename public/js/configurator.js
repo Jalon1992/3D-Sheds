@@ -62,6 +62,15 @@ const fmt = n => money(n, S().currency_symbol || '$');
 const curStyle = () => state.catalog.styles.find(s => s.id === state.config.style_id);
 const curSize = () => curStyle()?.sizes.find(z => z.id === state.config.size_id);
 const geo = () => shedGeometry(curStyle(), curSize());
+const ftIn = v => { const t = Math.round(Number(v || 0) * 12), f = Math.floor(t / 12), i = t - f * 12; return i ? `${f}'-${i}"` : `${f}'`; };
+const NO_ROOM_TIP = 'Try another wall, a bigger size, or move or remove something to make space.';
+/** Pop-up for things the customer needs to read and acknowledge (e.g. no room for an item). */
+function notice(title, text) {
+  const d = $('#noticeDlg'); $('#noticeTitle').textContent = title; $('#noticeText').textContent = text;
+  state.lastNotice = { title, text, at: Date.now() };
+  if (!d.open) { try { d.showModal(); } catch { d.setAttribute('open', ''); } }
+}
+const sizeTxt = () => { const z = curSize(); return `${z.width}' × ${z.depth}'`; };
 const toast = (msg, ms = 2600) => { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), ms); };
 const newUid = () => 'u' + Date.now().toString(36) + (uidSeq++);
 
@@ -172,7 +181,11 @@ function addOption(o) {
     }
   }
   if (!spot) spot = findSpot(geo(), optById, items, o, preferredWall(o));
-  if (!spot) return toast(`No room left for ${o.name} — try a bigger size or move something.`);
+  if (!spot) {
+    if (o.placement === 'loft') return notice(`No room for another ${o.name}`, `Both end walls of this ${sizeTxt()} shed already have a loft.`);
+    const what = o.placement === 'ceiling' ? 'ceiling' : o.placement === 'roof' ? 'roof' : (o.kind === 'vent' || gableMode(o) === 'only') ? 'gable ends' : 'walls';
+    return notice(`No room for the ${o.name}`, `There isn't an open spot on the ${what} of this ${sizeTxt()} ${curStyle().name} for the ${o.name}${o.width && o.placement !== 'none' && o.placement !== 'loft' ? ` (${ftIn(o.width)} wide plus its trim)` : ''}.\n\n${NO_ROOM_TIP}`);
+  }
   const it = { uid: newUid(), option_id: o.id, wall: spot.wall, offset: spot.offset, ...(spot.gable ? { gable: true } : {}) };
   items.push(it);
   if (['wall_interior', 'loft', 'ceiling'].includes(o.placement) && !state.interior) setInterior(true);
@@ -193,7 +206,7 @@ function swapItem(uid, newId) {
   if (gableMode(o) === 'only') it.gable = true; else if (gableMode(o) !== 'allow') delete it.gable;
   if (!canPlace(geo(), optById, state.config.items, o, it, uid)) {
     const spot = findSpot(geo(), optById, state.config.items, o, it.wall, it.offset, uid, { gable: it.gable });
-    if (!spot) { it.option_id = prev; if (prevW) it.w = prevW; if (prevH) it.h = prevH; if (prevG) it.gable = prevG; else delete it.gable; return toast(`${o.name} doesn't fit here — remove or move something first.`); }
+    if (!spot) { it.option_id = prev; if (prevW) it.w = prevW; if (prevH) it.h = prevH; if (prevG) it.gable = prevG; else delete it.gable; return notice(`No room for the ${o.name}`, `The ${o.name} is bigger than the ${optById[prev].name} and there's no open spot for it on this ${sizeTxt()} shed.\n\n${NO_ROOM_TIP}`); }
     Object.assign(it, spot); if (!it.gable) delete it.gable;
   }
   rebuild(); selectItem(uid); renderPanel();
@@ -217,18 +230,21 @@ function moveToWall(uid, wall) {
   if (gableMode(o) === 'only' && !geo().isGable(wall)) return toast(`${o.name} only fits up in a gable end`);
   const wantGable = it.gable && geo().isGable(wall);
   const spot = findSpot(geo(), optById, state.config.items.filter(i => i.uid !== uid), o, wall, 0, uid, { w: it.w, h: it.h, gable: wantGable });
-  if (!spot || spot.wall !== wall) return toast(`No room on the ${wall} wall`);
+  if (!spot || spot.wall !== wall) return notice(`No room on the ${wall} wall`, `The ${o.name} doesn't fit on the ${wall} wall — there isn't an open space wide enough${o.placement === 'opening' ? ' (including its trim)' : ''}.\n\n${NO_ROOM_TIP}`);
   Object.assign(it, spot); if (!it.gable) delete it.gable;
   if (['wall_interior', 'loft'].includes(o.placement) && !state.interior) setInterior(true);
   rebuild(); selectItem(uid); showWall(wall); renderPanel();
 }
 /** Make sure every item still fits after a style/size change; move or drop what doesn't. */
 function setGable(uid, on) {
-  const it = state.config.items.find(i => i.uid === uid); const o = optById[it.option_id];
+  const it = state.config.items.find(i => i.uid === uid); if (!it) return; const o = optById[it.option_id];
+  if (on && (!WALLS.includes(it.wall) || !geo().isGable(it.wall) || gableMode(o) !== 'allow')) return;
   const cand = { ...it, gable: on || undefined };
   if (!canPlace(geo(), optById, state.config.items, o, cand, uid)) {
     const spot = findSpot(geo(), optById, state.config.items, o, it.wall, it.offset, uid, { w: it.w, h: it.h, gable: on });
-    if (!spot || spot.wall !== it.wall || !!spot.gable !== on) return toast(on ? `Not enough room in the gable for ${o.name} at this size` : `No room on the ${it.wall} wall below the gable`);
+    if (!spot || spot.wall !== it.wall || !!spot.gable !== on) return notice(on ? 'Not enough room in the gable' : `No room on the ${it.wall} wall`, on
+      ? `The ${o.name} is too big to fit up in the gable of this ${sizeTxt()} ${curStyle().name}${it.wall ? '' : ''}, or something else is already there.\n\nTry a smaller gable window or a larger shed.`
+      : `There's no open spot on the ${it.wall} wall for the ${o.name}.\n\n${NO_ROOM_TIP}`);
     Object.assign(cand, spot);
   }
   Object.assign(it, cand); if (!it.gable) delete it.gable;
@@ -238,6 +254,8 @@ function fitItems(announce) {
   const g = geo(); const keep = [], moved = [], dropped = [];
   for (const it of state.config.items) {
     const o = optById[it.option_id];
+    if (!o) continue; // option no longer exists
+    if (it.gable && !(WALLS.includes(it.wall) && g.isGable(it.wall) && gableMode(o) === 'allow')) delete it.gable;
     if (!avail(o) && !(it.standard_of && it.standard_of === it.option_id)) { dropped.push(o.name + ' (not offered on this style)'); continue; }
     const wallOk = !(o.placement === 'loft' && !g.isGable(it.wall));
     if (!it.wall || !WALLS.includes(it.wall) || (wallOk && canPlace(g, optById, keep, o, it, it.uid))) { keep.push(it); continue; }
@@ -246,7 +264,8 @@ function fitItems(announce) {
     else dropped.push(o.name);
   }
   state.config.items = keep;
-  if (announce && (moved.length || dropped.length)) toast([moved.length ? 'Moved to fit: ' + moved.join(', ') : '', dropped.length ? 'Removed (no room): ' + dropped.join(', ') : ''].filter(Boolean).join(' · '), 5000);
+  if (dropped.length) notice('Some items no longer fit', `There's no room for ${dropped.length === 1 ? 'this item' : 'these items'} on the ${sizeTxt()} ${curStyle().name}, so ${dropped.length === 1 ? 'it was' : 'they were'} removed:\n\n• ${dropped.join('\n• ')}${moved.length ? `\n\nMoved to fit: ${moved.join(', ')}` : ''}`);
+  else if (announce && moved.length) toast('Moved to fit: ' + moved.join(', '), 5000);
 }
 
 // ---- Drag & drop: called continuously while an item is dragged on the 3D model
@@ -274,7 +293,10 @@ function dragItem(uid, hit) {
   offset = resolvePlacement(g, o, { ...it, wall, offset, gable }).offset;
   if (wall === it.wall && offset === it.offset) return;
   const cand = { ...it, wall, offset, gable };
-  if (!canPlace(g, optById, state.config.items, o, cand, uid)) return; // blocked: stay at last good spot
+  if (!canPlace(g, optById, state.config.items, o, cand, uid)) { // blocked: stay at last good spot
+    if (Date.now() - (dragItem.warned || 0) > 2500) { dragItem.warned = Date.now(); toast(`No room there for the ${o.name}`); }
+    return;
+  }
   it.wall = wall; it.offset = offset; if (gable) it.gable = true; else delete it.gable; queueRebuild(uid);
 }
 function queueRebuild(uid) {
@@ -534,7 +556,11 @@ $('#panel').addEventListener('click', e => {
   else if (d.dl === 'glb') downloadGLB();
   else if (d.dl === 'quotepdf') downloadQuotePDF(b);
   else if (d.dl === 'plan') openPlan();
-  else if (d.dl === 'link') { navigator.clipboard?.writeText(`${location.origin}/?q=${state.submitted.token}`); toast('Link copied'); }
+  else if (d.dl === 'link') {
+    const link = new URL(state.submitted.links?.view_3d || `/?q=${state.submitted.token}`, location.href).href;
+    if (!navigator.clipboard) notice('Your design link', link);
+    else navigator.clipboard.writeText(link).then(() => toast('Link copied'), () => notice('Your design link', link));
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -658,7 +684,15 @@ async function boot() {
         state.config = q.config;
         if (!state.config.roof_material) state.config.roof_material = cat.styles.find(s => s.id === q.config.style_id)?.roof_material || 'shingle';
         state.maxStep = 3; state.step = 3;
-        if (!cat.styles.find(s => s.id === q.config.style_id)) throw new Error('style gone');
+        const qs = cat.styles.find(s => s.id === q.config.style_id);
+        if (!qs) throw new Error('style gone');
+        // the size may have been removed since the quote was made: use the closest one
+        if (!qs.sizes.some(z => z.id === state.config.size_id)) {
+          const old = q.size || {}; const area = (old.width || 0) * (old.depth || 0);
+          state.config.size_id = qs.sizes.reduce((a, z) => (Math.abs(z.width * z.depth - area) < Math.abs(a.width * a.depth - area) ? z : a), qs.sizes[0]).id;
+        }
+        state.config.items = (state.config.items || []).map((it, i) => ({ ...it, uid: it.uid || 'q' + i })).filter(it => optById[it.option_id]);
+        fitItems(false);
       }
     } catch { state.config = null; }
   }
@@ -674,11 +708,12 @@ async function boot() {
   if (savedLoc.zip && !state.config.zip && /^\d{5}$/.test(savedLoc.zip)) state.config.zip = savedLoc.zip;
   applyTier();
   rebuild();
-  if (params.has('debug')) window.__shed = { scene, state };
+  if (params.has('debug')) window.__shed = { scene, state, optById, addOption, removeItem, swapItem, moveItem, moveToWall, setGable, dragItem, fitItems, pricing, notice, go };
   renderSteps(); renderPanel();
   setTimeout(() => $('#loading').classList.add('gone'), 150);
   setTimeout(() => $('#hint').classList.add('gone'), 9000);
   if (dlWant === 'glb') setTimeout(downloadGLB, 1200);
   if (dlWant === 'plan') setTimeout(openPlan, 600);
 }
+$('#noticeOk').onclick = () => $('#noticeDlg').close();
 boot().catch(e => { console.error(e); $('#panel').innerHTML = `<h2>Something went wrong</h2><p class="sub">${esc(e.message)}</p>`; });

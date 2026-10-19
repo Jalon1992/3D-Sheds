@@ -64,6 +64,8 @@
     "drip_edge_size": null,
     "drip_edge_color": "roof",
     "available_options": null,
+    "gambrel_upper_len": null,
+    "rake_tail": null,
     "sizes": [
      {
       "id": 1,
@@ -72,7 +74,9 @@
       "depth": 8,
       "price": 3575,
       "active": 1,
-      "sort": 0
+      "sort": 0,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 2,
@@ -81,7 +85,9 @@
       "depth": 10,
       "price": 4120,
       "active": 1,
-      "sort": 1
+      "sort": 1,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 3,
@@ -90,7 +96,9 @@
       "depth": 12,
       "price": 4665,
       "active": 1,
-      "sort": 2
+      "sort": 2,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 4,
@@ -99,7 +107,9 @@
       "depth": 12,
       "price": 5480,
       "active": 1,
-      "sort": 3
+      "sort": 3,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 5,
@@ -108,7 +118,9 @@
       "depth": 14,
       "price": 6160,
       "active": 1,
-      "sort": 4
+      "sort": 4,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 6,
@@ -117,7 +129,9 @@
       "depth": 16,
       "price": 6840,
       "active": 1,
-      "sort": 5
+      "sort": 5,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 7,
@@ -126,7 +140,9 @@
       "depth": 16,
       "price": 7930,
       "active": 1,
-      "sort": 6
+      "sort": 6,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 8,
@@ -135,7 +151,9 @@
       "depth": 20,
       "price": 9560,
       "active": 1,
-      "sort": 7
+      "sort": 7,
+      "hip_len": null,
+      "upper_len": null
      }
     ]
    },
@@ -202,6 +220,8 @@
     "drip_edge_size": null,
     "drip_edge_color": "roof",
     "available_options": null,
+    "gambrel_upper_len": null,
+    "rake_tail": "level",
     "sizes": [
      {
       "id": 9,
@@ -210,7 +230,9 @@
       "depth": 10,
       "price": 6400,
       "active": 1,
-      "sort": 0
+      "sort": 0,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 10,
@@ -219,7 +241,9 @@
       "depth": 10,
       "price": 7200,
       "active": 1,
-      "sort": 1
+      "sort": 1,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 11,
@@ -228,7 +252,9 @@
       "depth": 10,
       "price": 8000,
       "active": 1,
-      "sort": 2
+      "sort": 2,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 12,
@@ -237,7 +263,9 @@
       "depth": 12,
       "price": 7360,
       "active": 1,
-      "sort": 3
+      "sort": 3,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 13,
@@ -246,7 +274,9 @@
       "depth": 12,
       "price": 9280,
       "active": 1,
-      "sort": 4
+      "sort": 4,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 14,
@@ -255,7 +285,9 @@
       "depth": 12,
       "price": 11200,
       "active": 1,
-      "sort": 5
+      "sort": 5,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 15,
@@ -264,7 +296,9 @@
       "depth": 12,
       "price": 13120,
       "active": 1,
-      "sort": 6
+      "sort": 6,
+      "hip_len": null,
+      "upper_len": null
      }
     ]
    },
@@ -321,6 +355,8 @@
     "drip_edge_size": null,
     "drip_edge_color": "roof",
     "available_options": null,
+    "gambrel_upper_len": null,
+    "rake_tail": null,
     "sizes": [
      {
       "id": 16,
@@ -329,7 +365,9 @@
       "depth": 8,
       "price": 5640,
       "active": 1,
-      "sort": 0
+      "sort": 0,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 17,
@@ -338,7 +376,9 @@
       "depth": 8,
       "price": 6410,
       "active": 1,
-      "sort": 1
+      "sort": 1,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 18,
@@ -347,7 +387,9 @@
       "depth": 10,
       "price": 6600,
       "active": 1,
-      "sort": 2
+      "sort": 2,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 19,
@@ -356,7 +398,9 @@
       "depth": 10,
       "price": 7560,
       "active": 1,
-      "sort": 3
+      "sort": 3,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 20,
@@ -365,7 +409,9 @@
       "depth": 10,
       "price": 8520,
       "active": 1,
-      "sort": 4
+      "sort": 4,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 21,
@@ -374,7 +420,9 @@
       "depth": 12,
       "price": 11015,
       "active": 1,
-      "sort": 5
+      "sort": 5,
+      "hip_len": null,
+      "upper_len": null
      }
     ]
    },
@@ -436,6 +484,8 @@
     "drip_edge_size": null,
     "drip_edge_color": "roof",
     "available_options": null,
+    "gambrel_upper_len": null,
+    "rake_tail": null,
     "sizes": [
      {
       "id": 22,
@@ -444,7 +494,9 @@
       "depth": 12,
       "price": 7440,
       "active": 1,
-      "sort": 0
+      "sort": 0,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 23,
@@ -453,7 +505,9 @@
       "depth": 16,
       "price": 9120,
       "active": 1,
-      "sort": 1
+      "sort": 1,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 24,
@@ -462,7 +516,9 @@
       "depth": 16,
       "price": 10465,
       "active": 1,
-      "sort": 2
+      "sort": 2,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 25,
@@ -471,7 +527,9 @@
       "depth": 20,
       "price": 12480,
       "active": 1,
-      "sort": 3
+      "sort": 3,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 26,
@@ -480,7 +538,9 @@
       "depth": 24,
       "price": 14495,
       "active": 1,
-      "sort": 4
+      "sort": 4,
+      "hip_len": null,
+      "upper_len": null
      },
      {
       "id": 27,
@@ -489,7 +549,9 @@
       "depth": 24,
       "price": 16510,
       "active": 1,
-      "sort": 5
+      "sort": 5,
+      "hip_len": null,
+      "upper_len": null
      }
     ]
    }

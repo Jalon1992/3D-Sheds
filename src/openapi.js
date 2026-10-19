@@ -110,12 +110,14 @@ Failed deliveries are retried after 1s, 5s and 25s.
             corner_trim: { type: 'number', description: 'Corner board width (inches, default 5)' }, casing_trim: { type: 'number', description: 'Door/window trim width (inches, default 4)' },
             roof_choices: { type: 'array', items: { type: 'string' }, description: 'Roofing materials customers may choose' },
             siding_type: { type: 'string', enum: ['lp_smartside', 'lap', 'board_batten', 't111', 'metal'] }, trim_type: { type: 'string', enum: ['lp', 'smooth'] }, roof_material: { type: 'string', description: 'Default (included) roofing material key' },
+            gambrel_upper_len: { type: ['number', 'null'], description: 'Lofted barn: upper section length along the slope (ft). When set, the upper pitch follows from it.' },
+            rake_tail: { type: ['string', 'null'], enum: ['level', 'plumb', null], description: 'Rake / fly-rafter tail cut: level (flat at the fascia bottom) or plumb. null = flat on barns, plumb on others.' },
             available_options: { type: ['array', 'null'], items: { type: 'integer' }, description: 'Option ids offered on this style. null = every option. Standard options are always available.' },
             standard_options: { type: 'array', items: { type: 'object', properties: { option_id: { type: 'integer' }, wall: { type: 'string' }, offset: { type: 'number' }, w: { type: 'number' }, h: { type: 'number' }, gable: { type: 'boolean', description: 'Sit up in the gable (options with gable_mode allow/only)' } } } },
             default_colors: { type: 'object' }, active: { type: 'integer' }, sort: { type: 'integer' },
           },
         },
-        Size: { type: 'object', properties: { id: { type: 'integer', readOnly: true }, style_id: { type: 'integer' }, width: { type: 'number' }, depth: { type: 'number' }, price: { type: 'number' }, active: { type: 'integer' }, sort: { type: 'integer' } } },
+        Size: { type: 'object', properties: { id: { type: 'integer', readOnly: true }, style_id: { type: 'integer' }, width: { type: 'number' }, depth: { type: 'number' }, price: { type: 'number' }, hip_len: { type: ['number', 'null'], description: 'Lofted barn: hip (lower section) length for this size, ft' }, upper_len: { type: ['number', 'null'], description: 'Lofted barn: upper section length for this size, ft' }, active: { type: 'integer' }, sort: { type: 'integer' } } },
         Color: { type: 'object', properties: { id: { type: 'integer', readOnly: true }, name: { type: 'string' }, hex: { type: 'string' }, category: { type: 'string', enum: ['siding', 'trim', 'roof', 'door', 'window'] }, material: { type: 'string', nullable: true, description: 'Roof colors: which roofing material it is offered for (null = all)' }, price: { type: 'number' }, active: { type: 'integer' } } },
         Option: {
           type: 'object', properties: {

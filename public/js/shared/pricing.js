@@ -1,7 +1,7 @@
 // Shared pricing + configuration helpers. Used by the browser AND the server
 // (the server re-prices every quote with this same code, so prices can't be tampered with).
 
-import { shedGeometry, roofArea, WALLS, wallLength } from './geometry.js';
+import { shedGeometry, roofArea, WALLS, wallLength, canPlace, findSpot, gableMode } from './geometry.js';
 export { WALLS, wallLength };
 
 /** Roofing materials. Admin can rename/re-price these in Settings → Roofing. */
@@ -115,7 +115,9 @@ export function defaultConfig(catalog, styleId, sizeId) {
   const size = (style.sizes.find(s => s.id === sizeId)) || style.sizes[0];
   const firstColor = cat => (catalog.colors.find(c => c.category === cat && c.active !== 0) || {}).id || null;
   const d = style.default_colors || {};
-  const items = (style.standard_options || []).map((s, i) => ({
+  // skip standard options whose option was deleted or hidden since the style was set up
+  const live = new Set(catalog.options.filter(o => o.active !== 0).map(o => Number(o.id)));
+  const items = (style.standard_options || []).filter(s => live.has(Number(s.option_id))).map((s, i) => ({
     uid: 'std' + i,
     option_id: s.option_id,
     wall: s.wall || null,
@@ -238,6 +240,25 @@ export function optionAvailable(style, opt) {
   return list.map(Number).includes(Number(opt.id));
 }
 
+/** Same placement rules as the builder: max quantities, lofts/vents/gable windows on gable ends,
+ *  nothing overlapping (trim included). Items that don't fit slide to the nearest free spot or are dropped. */
+function fitAll(style, size, optById, items) {
+  const geo = shedGeometry(style, size), keep = [], counts = {}, seen = new Set();
+  for (const raw of items) {
+    const it = { ...raw }, o = optById[it.option_id];
+    counts[o.id] = (counts[o.id] || 0) + 1;
+    if (counts[o.id] > (Number(o.max_qty) || 10)) continue;
+    while (seen.has(it.uid)) it.uid += '_'; seen.add(it.uid);
+    if (o.placement === 'none') { if (counts[o.id] > 1) continue; it.wall = null; keep.push(it); continue; }
+    if (o.placement === 'ceiling' || o.placement === 'roof') { it.wall = o.placement; keep.push(it); continue; }
+    if (it.gable && !(WALLS.includes(it.wall) && geo.isGable(it.wall) && gableMode(o) === 'allow')) delete it.gable;
+    if (WALLS.includes(it.wall) && canPlace(geo, optById, keep, o, it, it.uid)) { keep.push(it); continue; }
+    const spot = findSpot(geo, optById, keep, o, WALLS.includes(it.wall) ? it.wall : null, it.offset || 0, it.uid, { w: it.w, h: it.h, gable: it.gable });
+    if (spot) { const n = { ...it, ...spot }; if (!n.gable) delete n.gable; keep.push(n); }
+  }
+  return keep;
+}
+
 export function sanitizeConfig(catalog, raw) {
   const style = catalog.styles.find(s => s.id === Number(raw?.style_id));
   if (!style) throw new Error('style_id is invalid');
@@ -256,7 +277,7 @@ export function sanitizeConfig(catalog, raw) {
   }
   const optById = Object.fromEntries(catalog.options.map(o => [o.id, o]));
   const items = (Array.isArray(raw.items) ? raw.items : []).slice(0, 200)
-    .filter(i => optIds.has(Number(i.option_id)) && optionAvailable(style, optById[Number(i.option_id)]))
+    .filter(i => i && typeof i === 'object' && optIds.has(Number(i.option_id)) && optionAvailable(style, optById[Number(i.option_id)]))
     .map((i, n) => ({
       uid: String(i.uid || 'i' + n).slice(0, 40),
       option_id: Number(i.option_id),
@@ -271,7 +292,7 @@ export function sanitizeConfig(catalog, raw) {
   // Standard slots must actually be standard for this style
   const std = new Set((style.standard_options || []).map(s => s.option_id));
   for (const it of items) if (it.standard_of && !std.has(it.standard_of)) it.standard_of = null;
-  const out = { style_id: style.id, size_id: size.id, roof_material, colors, items };
+  const out = { style_id: style.id, size_id: size.id, roof_material, colors, items: fitAll(style, size, optById, items) };
   if (findDealer(catalog, raw.dealer_id)) out.dealer_id = findDealer(catalog, raw.dealer_id).id;
   if (/^\d{5}$/.test(String(raw.zip || ''))) out.zip = String(raw.zip);
   return out;

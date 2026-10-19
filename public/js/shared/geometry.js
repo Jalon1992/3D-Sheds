@@ -1,5 +1,8 @@
 // Pure shed geometry (no Three.js) — roof profiles, wall heights, placement & collision rules.
 export const WALLS = ['front', 'right', 'back', 'left'];
+/** Rake / fly-rafter tail: true = cut flat (level) at the bottom of the fascia, false = plumb cut only.
+ *  Set per style; blank = flat on gambrel barns, plumb on everything else. */
+export function rakeTailLevel(style) { return style?.rake_tail === 'level' || style?.rake_tail === 'plumb' ? style.rake_tail === 'level' : style?.roof_type === 'barn'; }
 export function wallLength(wall, size) { return (wall === 'front' || wall === 'back') ? size.width : size.depth; }
 
 export const FLOOR_Y = 0.75;     // skids + floor
@@ -7,7 +10,7 @@ export const WALL_T = 0.33;      // wall thickness (ft)
 
 export function shedGeometry(style, size) {
   const W = size.width, D = size.depth, H = Number(style.wall_height) || 7;
-  const k = (Number(style.roof_pitch) || 6) / 12;
+  let k = (Number(style.roof_pitch) || 6) / 12;
   const ridgeAlongZ = style.ridge_axis !== 'width';
   const S = ridgeAlongZ ? W : D;           // span (across the slope)
   const L = ridgeAlongZ ? D : W;           // ridge length
@@ -19,12 +22,16 @@ export function shedGeometry(style, size) {
       // break point at gambrel_break % of the half-span measured in from the wall.
       // Lower section size: gambrel_lower_len = length along the slope in ft (preferred),
       // otherwise gambrel_break % of the half-span.
+      // Hip (lower section) and upper section lengths can be set per style and overridden per size.
+      // If the upper length is set too, the upper pitch follows from it.
       const kl = (Number(style.roof_pitch_lower) || 18) / 12;
-      let run;
-      if (Number(style.gambrel_lower_len) > 0) run = Number(style.gambrel_lower_len) / Math.hypot(1, kl);
-      else run = s * Math.min(0.9, Math.max(0.1, (Number(style.gambrel_break) || 42) / 100));
+      const hip = Number(size.hip_len) > 0 ? Number(size.hip_len) : Number(style.gambrel_lower_len) > 0 ? Number(style.gambrel_lower_len) : 0;
+      let run = hip ? hip / Math.hypot(1, kl) : s * Math.min(0.9, Math.max(0.1, (Number(style.gambrel_break) || 42) / 100));
       run = Math.min(run, s * 0.9);
-      const bs = s - run, r1 = run * kl, r2 = bs * k;
+      const bs = s - run, r1 = run * kl;
+      const up = Number(size.upper_len) > 0 ? Number(size.upper_len) : Number(style.gambrel_upper_len) > 0 ? Number(style.gambrel_upper_len) : 0;
+      let r2 = bs * k;
+      if (up > bs + 0.01) { r2 = Math.min(Math.sqrt(up * up - bs * bs), bs * 2.5); k = r2 / bs; } // upper pitch follows (capped at 30/12)
       profile = [[-s, 0], [-bs, r1], [0, r1 + r2], [bs, r1], [s, 0]]; break;
     }
     case 'lean_to': profile = [[-s, 0], [s, S * k]]; break;
@@ -212,7 +219,8 @@ export function findSpot(geo, optById, items, opt, prefWall, prefOffset = 0, ign
 }
 
 export function canPlace(geo, optById, items, opt, cand, ignoreUid) {
-  if ((opt.kind === 'vent' || gableMode(opt) === 'only') && WALLS.includes(cand.wall) && !geo.isGable(cand.wall)) return false;
+  if ((opt.kind === 'vent' || gableMode(opt) === 'only' || opt.placement === 'loft') && WALLS.includes(cand.wall) && !geo.isGable(cand.wall)) return false;
+  if (opt.placement === 'loft') return !items.some(i => i.uid !== ignoreUid && i.wall === cand.wall && optById[i.option_id]?.placement === 'loft');
   const p = resolvePlacement(geo, opt, cand);
   return p.fits !== false && Math.abs(p.offset - cand.offset) < 0.01 && !collides(geo, optById, items, opt, cand, ignoreUid);
 }

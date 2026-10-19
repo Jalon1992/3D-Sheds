@@ -162,8 +162,8 @@ v1.post('/quotes/:id/resend', (req, res) => {
 
 // ---- Generic CRUD for catalog + webhooks
 const TABLES = {
-  styles: ['name', 'description', 'image_url', 'roof_type', 'ridge_axis', 'wall_height', 'roof_pitch', 'roof_pitch_lower', 'roof_pitch_back', 'gambrel_break', 'gambrel_lower_len', 'overhang', 'gable_overhang', 'fascia_size', 'rake_size', 'metal_rake_size', 'metal_rake_leg', 'roof_edge', 'rake_cap_size', 'drip_edge_size', 'drip_edge_color', 'corner_trim', 'casing_trim', 'siding_type', 'trim_type', 'roof_material', 'roof_choices', 'available_options', 'standard_options', 'default_colors', 'active', 'sort'],
-  sizes: ['style_id', 'width', 'depth', 'price', 'active', 'sort'],
+  styles: ['name', 'description', 'image_url', 'roof_type', 'ridge_axis', 'wall_height', 'roof_pitch', 'roof_pitch_lower', 'roof_pitch_back', 'gambrel_break', 'gambrel_lower_len', 'gambrel_upper_len', 'rake_tail', 'overhang', 'gable_overhang', 'fascia_size', 'rake_size', 'metal_rake_size', 'metal_rake_leg', 'roof_edge', 'rake_cap_size', 'drip_edge_size', 'drip_edge_color', 'corner_trim', 'casing_trim', 'siding_type', 'trim_type', 'roof_material', 'roof_choices', 'available_options', 'standard_options', 'default_colors', 'active', 'sort'],
+  sizes: ['style_id', 'width', 'depth', 'price', 'hip_len', 'upper_len', 'active', 'sort'],
   colors: ['name', 'hex', 'category', 'material', 'price', 'active', 'sort'],
   options: ['name', 'description', 'category', 'kind', 'placement', 'swap_group', 'width', 'height', 'depth', 'elevation', 'gable_mode', 'price', 'price_unit', 'model_url', 'image_url', 'plan_label', 'max_qty', 'active', 'sort'],
   webhooks: ['name', 'url', 'events', 'secret', 'headers', 'active'],
@@ -174,7 +174,7 @@ function clean(table, body) {
     let v = body[k];
     if (k === 'available_options' && !Array.isArray(v)) v = null;
     else if (JSON_COLS.has(k) && typeof v !== 'string') v = JSON.stringify(v ?? (k === 'headers' || k === 'default_colors' ? {} : []));
-    if (['gable_overhang', 'roof_pitch_lower', 'roof_pitch_back', 'gambrel_break', 'gambrel_lower_len', 'fascia_size', 'rake_size', 'metal_rake_size', 'metal_rake_leg', 'rake_cap_size', 'drip_edge_size', 'corner_trim', 'casing_trim'].includes(k) && (v === '' || v === undefined)) v = null;
+    if (['gable_overhang', 'roof_pitch_lower', 'roof_pitch_back', 'gambrel_break', 'gambrel_lower_len', 'gambrel_upper_len', 'hip_len', 'upper_len', 'fascia_size', 'rake_size', 'metal_rake_size', 'metal_rake_leg', 'rake_cap_size', 'drip_edge_size', 'corner_trim', 'casing_trim'].includes(k) && (v === '' || v === undefined)) v = null;
     if (typeof v === 'boolean') v = v ? 1 : 0;
     if (v === '') v = null;
     out[k] = v;
@@ -330,8 +330,10 @@ admin.put('/styles/:id/sizes', (req, res) => {
   for (const [i, z] of (req.body || []).entries()) {
     const w = Number(z.width), d = Number(z.depth);
     if (!w || !d) continue;
-    if (z.id) { run('UPDATE sizes SET width=?, depth=?, price=?, active=?, sort=? WHERE id=? AND style_id=?', w, d, Number(z.price) || 0, z.active ? 1 : 0, i, Number(z.id), sid); keep.push(Number(z.id)); }
-    else keep.push(Number(run('INSERT INTO sizes (style_id, width, depth, price, active, sort) VALUES (?,?,?,?,?,?)', sid, w, d, Number(z.price) || 0, z.active === false ? 0 : 1, i).lastInsertRowid));
+    const on = !(z.active === false || z.active === 0 || z.active === '0');
+    const len = v => (Number(v) > 0 ? Number(v) : null);
+    if (z.id && get('SELECT id FROM sizes WHERE id=? AND style_id=?', Number(z.id), sid)) { run('UPDATE sizes SET width=?, depth=?, price=?, active=?, sort=?, hip_len=?, upper_len=? WHERE id=? AND style_id=?', w, d, Number(z.price) || 0, on ? 1 : 0, i, len(z.hip_len), len(z.upper_len), Number(z.id), sid); keep.push(Number(z.id)); }
+    else keep.push(Number(run('INSERT INTO sizes (style_id, width, depth, price, active, sort, hip_len, upper_len) VALUES (?,?,?,?,?,?,?,?)', sid, w, d, Number(z.price) || 0, on ? 1 : 0, i, len(z.hip_len), len(z.upper_len)).lastInsertRowid));
   }
   run(`DELETE FROM sizes WHERE style_id = ? ${keep.length ? `AND id NOT IN (${keep.join(',')})` : ''}`, sid);
   res.json(all('SELECT * FROM sizes WHERE style_id = ? ORDER BY sort', sid));
@@ -366,6 +368,10 @@ app.get('/docs', (req, res) => res.sendFile(join(__dirname, 'public', 'docs.html
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }));
 
 app.use((err, req, res, next) => {
+  // malformed JSON / too-large bodies are the client's fault, not a server error
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Request body is not valid JSON' });
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request body is too large' });
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File is too large' });
   console.error(err);
   res.status(500).json({ error: err.message || 'Server error' });
 });

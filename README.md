@@ -76,10 +76,14 @@ Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side
 
 - **Sizes:** width × depth with a base price each. Use *Fill prices* to set every size from a $/sq ft + base amount, then tweak.
 - **Standard options:** items already on the shed and included in the base price (e.g. a 36" door on the front). Pick the option, the wall and an offset in feet from the wall's centre (viewed from outside, + is right). Optional **width/height** columns resize a door or window for just that style; leave them blank to use the option's own size. Customers who swap a standard item pay only the difference.
-- **Options offered on this style:** leave it on *Every option*, or switch to *Only the options ticked below* and tick what this style offers (e.g. no lofts on the garage). Customers only see the ticked options, switching styles drops items the new style doesn't offer, and the server enforces it on every quote. The style's standard options are always included.
+- **Options offered on this style:** untick anything the style shouldn't offer (e.g. no lofts on the garage). Customers only see the ticked options, switching styles drops items the new style doesn't offer, and the server enforces it on every quote. The style's standard options are always included.
 - **Default colors** per style.
 
-**Roof trim rules:** shingle roofs get no metal trim at all: shingle ridge caps, shingles lapping over the gambrel break, and a trim-color rake board (no metal rake edge or drip edge). Metal roofs keep the metal ridge cap, transition trim and rake trim. On every style the rake/fly-rafter tails are cut plumb, then cut **flat (level) at the bottom of the fascia**, so nothing hangs below it. That matters most on the steep lower slope of the Lofted Barn.
+**Roof trim rules:** shingle roofs get no metal trim at all: shingle ridge caps, shingles lapping over the gambrel break, and a trim-color rake board (no metal rake edge or drip edge). Metal roofs keep the metal ridge cap, transition trim and rake trim.
+
+**Fly rafter (rake) tail cut — per style:** *Flat* cuts the rake tails level with the bottom of the fascia, so no point hangs below it (best on the steep hips of a Lofted Barn). *Plumb* is a vertical cut in line with the fascia face. Leave it on *Default* for flat on barns and plumb on everything else. The elevation drawings follow the same setting.
+
+**Lofted Barn hip lengths:** set the **hip (lower section) length** and, optionally, the **upper section length** (both measured along the slope, without overhang). With only the hip length set, the upper pitch decides the upper section. With both set, the upper pitch is worked out to match. Both can be overridden **per size** in the size table (*Hip len / Upper len* columns). The roof readout shows each section's actual pitch and length for the previewed size.
 
 ### Roofing (Architectural Shingles / Ag Panel Metal)
 Admin → **Roofing & colors → Roofing materials**: rename, describe and price each roofing type: per sq ft of **roof surface** (calculated from pitch and overhangs), per sq ft of floor, or flat. On each style choose the **standard roofing** (included in the base price) and which roofing types customers can pick; picking a different one charges the difference. Each roof color can be limited to shingles or metal (e.g. Galvalume only shows for Ag Panel).
@@ -109,7 +113,7 @@ Every option has a category, price, size and a **placement**:
 
 **Gable windows:** each window/vent has *Can it go up in the gable?*: **No** (walls only), **Yes** (the customer gets *On the wall / Up in the gable* buttons when it's on a gable end) or **Gable only**. Up in the gable, the window is centred between the top of the wall and the rake. If it's too tall for that gable, the customer is told so and it stays put. Standard options have an *In gable* tick too. A sample *Gable Window (24" × 16")* is included.
 
-**No overlaps:** doors, windows and everything else on a wall can't overlap, **trim included**: door/window casings, sills and shutters are counted, and openings stay clear of the corner boards. Dragging stops at the last free spot. Swapping to something bigger, or changing size/style, slides items to the nearest free spot, or tells the customer what had to be removed.
+**No overlaps:** doors, windows and everything else on a wall can't overlap, **trim included**: door/window casings, sills and shutters are counted, and openings stay clear of the corner boards. Dragging stops at the last free spot. When something can't fit (adding it, swapping to something bigger, moving it to another wall, putting it in the gable, or a size change that leaves no room), the customer gets a **pop-up saying there's no room** and what to try. The server applies the same rules to every quote and price request, including ones sent through the API.
 
 **Swap group:** options with the same swap group (e.g. `door`, `window`) appear as upgrade choices when the customer clicks that item on the model.
 

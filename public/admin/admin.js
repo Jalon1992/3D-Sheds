@@ -303,7 +303,8 @@ const STYLE_FIELDS = () => [
   { type: 'section', label: 'Roof pitches & section lengths' },
   { key: 'roof_pitch', label: 'Roof pitch (rise per 12")', type: 'number', step: '0.25', help: 'e.g. 6 = 6/12. Gambrel: the UPPER section. Saltbox: the long slope.' },
   { key: 'roof_pitch_lower', label: 'Gambrel lower pitch (rise per 12")', type: 'number', step: '0.25', ph: '18', help: 'Gambrel (barn) only — the steep lower section.' },
-  { key: 'gambrel_lower_len', label: 'Gambrel lower section length (ft)', type: 'number', step: '0.0625', ph: '3.25', help: 'Measured along the slope, wall to break. The upper section fills the rest.' },
+  { key: 'gambrel_lower_len', label: 'Gambrel hip (lower section) length (ft)', type: 'number', step: '0.0625', ph: '3.25', help: 'Along the slope, from the wall to the break. Can be set per size in the size table below.' },
+  { key: 'gambrel_upper_len', label: 'Gambrel upper section length (ft) — optional', type: 'number', step: '0.0625', ph: 'auto', help: 'Along the slope, break to ridge. Blank = the upper pitch above decides it. If set, the upper pitch is worked out from this length. Can be set per size too.' },
   { key: 'gambrel_break', label: 'Or: gambrel break (%)', type: 'number', step: '1', ph: '42', help: 'Only used if the length above is blank: break position as % of half the span.' },
   { key: 'roof_pitch_back', label: 'Saltbox short-slope pitch (rise per 12")', type: 'number', step: '0.25', help: 'Saltbox only — the short, steeper slope. The ridge sits where the two slopes meet.' },
   { type: 'html', html: '<div class="full roofinfo" id="roofInfo"></div>' },
@@ -322,6 +323,7 @@ const STYLE_FIELDS = () => [
   { key: 'drip_edge_size', label: 'Drip edge height (in)', type: 'number', step: '0.25', ph: '1.5', help: 'Rake board + drip edge style: the metal edge along the top of the fascia.' },
   { key: 'metal_rake_leg', label: 'Metal rake leg (in)', type: 'number', step: '0.25', ph: '2 – 3.5', help: 'How far the metal rake laps onto the roofing.' },
   { key: 'drip_edge_color', label: 'Metal edge color', type: 'select', options: [['roof', 'Match the roof'], ['trim', 'Match the trim']] },
+  { key: 'rake_tail', label: 'Fly rafter (rake) tail cut', type: 'select', full: true, options: [['', 'Default — flat on barns, plumb on other roofs'], ['level', 'Flat cut — level with the bottom of the fascia'], ['plumb', 'Plumb cut — vertical, in line with the fascia face']] },
   { type: 'section', label: 'Other trim (trim color)' },
   { key: 'corner_trim', label: 'Corner board width (in)', type: 'number', step: '0.25', ph: '5' },
   { key: 'casing_trim', label: 'Door & window trim width (in)', type: 'number', step: '0.25', ph: '4' },
@@ -367,28 +369,33 @@ function styleEditor(style) {
   const s = style || { name: '', roof_type: 'gable', ridge_axis: 'depth', wall_height: 7, roof_pitch: 6, overhang: 0.75, gable_overhang: 0.5, siding_type: 'lp_smartside', trim_type: 'lp', roof_material: 'shingle', active: 1, sort: catalog.styles.length, sizes: [], standard_options: [], default_colors: {} };
   let sizes = (s.sizes || []).map(z => ({ ...z }));
   if (!sizes.length) sizes = [{ width: 8, depth: 10, price: 3500, active: 1 }, { width: 10, depth: 12, price: 5200, active: 1 }];
-  let stds = (s.standard_options || []).map(x => ({ ...x }));
+  // drop standard options whose option has since been deleted
+  let stds = (s.standard_options || []).filter(x => catalog.options.some(o => o.id === Number(x.option_id))).map(x => ({ ...x }));
   let previewIdx = Math.min(sizes.length - 1, 1);
   let avail = Array.isArray(s.available_options) ? s.available_options.map(Number) : null; // null = all options
   const availHTML = () => {
     const stdIds = new Set(stds.map(x => Number(x.option_id)));
     const cats = CATEGORIES.filter(([k]) => catalog.options.some(o => o.category === k));
-    return `<div class="row" style="gap:16px;margin-bottom:8px">
-        <label class="chk"><input type="radio" name="av_mode" value="all" ${avail ? '' : 'checked'}>Every option</label>
-        <label class="chk"><input type="radio" name="av_mode" value="pick" ${avail ? 'checked' : ''}>Only the options ticked below</label>
-        ${avail ? '<button type="button" class="btn link sm" id="avAll">Tick all</button><button type="button" class="btn link sm" id="avNone">Untick all</button>' : ''}</div>
-      <div class="avgrid ${avail ? '' : 'off'}">${cats.map(([k, l]) => `<div><b>${esc(l)}</b>${catalog.options.filter(o => o.category === k).map(o => {
+    const off = avail ? catalog.options.filter(o => !stdIds.has(o.id) && !avail.includes(o.id)).length : 0;
+    return `<div class="row" style="gap:14px;margin-bottom:8px"><span class="muted" style="font-size:13px">${off ? `<b>${off}</b> option${off > 1 ? 's' : ''} hidden on this style` : 'Every option is offered on this style'}</span>
+        <button type="button" class="btn link sm" id="avAll">Tick all</button><button type="button" class="btn link sm" id="avNone">Untick all</button></div>
+      <div class="avgrid">${cats.map(([k, l]) => `<div><b>${esc(l)}</b>${catalog.options.filter(o => o.category === k).map(o => {
         const std = stdIds.has(o.id), on = !avail || std || avail.includes(o.id);
-        return `<label class="chk"><input type="checkbox" data-av="${o.id}" ${on ? 'checked' : ''} ${!avail || std ? 'disabled' : ''}>${esc(o.name)}${std ? ' <span class="muted">(standard)</span>' : ''}${o.active ? '' : ' <span class="muted">(hidden)</span>'}</label>`;
+        return `<label class="chk"><input type="checkbox" data-av="${o.id}" ${on ? 'checked' : ''} ${std ? 'disabled title="Standard on this style — always offered"' : ''}>${esc(o.name)}${std ? ' <span class="muted">(standard)</span>' : ''}${o.active ? '' : ' <span class="muted">(hidden everywhere)</span>'}</label>`;
       }).join('')}</div>`).join('')}</div>
-      <div class="muted" style="font-size:12px;margin-top:6px">Customers only see the ticked options for this style. Standard options are always included.</div>`;
+      <div class="muted" style="font-size:12px;margin-top:6px">Untick anything this style shouldn't offer — customers won't see it on this style. Standard options are always offered. While everything is ticked, options you add later are offered here automatically; once something is unticked, tick new options here to offer them.</div>`;
   };
+
   const optSel = (v, i) => `<select data-std="${i}" data-k="option_id">${catalog.options.filter(o => o.placement !== 'none').map(o => `<option value="${o.id}" ${o.id === v ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>`;
   const colorSel = cat => `<label class="fld"><span>Default ${cat} color</span><select name="dc_${cat}"><option value="">First in list</option>${catalog.colors.filter(c => c.category === cat).map(c => `<option value="${c.id}" ${c.id === s.default_colors?.[cat] ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>`;
-  const sizesHTML = () => `<table class="mini"><tr><th>Width (ft)</th><th>Depth (ft)</th><th>Base price</th><th>Active</th><th></th><th></th></tr>
+  const isBarn = () => (document.querySelector('#sf [name=roof_type]')?.value || s.roof_type) === 'barn';
+  const styleVal = k => document.querySelector(`#sf [name=${k}]`)?.value || s[k] || '';
+  const sizesHTML = () => `<table class="mini"><tr><th>Width (ft)</th><th>Depth (ft)</th><th>Base price</th>${isBarn() ? '<th title="Gambrel hip (lower section) length for this size">Hip len (ft)</th><th title="Gambrel upper section length for this size">Upper len (ft)</th>' : ''}<th>Active</th><th></th><th></th></tr>
     ${sizes.map((z, i) => `<tr><td><input type="number" step="0.5" data-sz="${i}" data-k="width" value="${z.width}"></td><td><input type="number" step="0.5" data-sz="${i}" data-k="depth" value="${z.depth}"></td>
-    <td><input type="number" step="1" data-sz="${i}" data-k="price" value="${z.price}"></td><td><input type="checkbox" data-sz="${i}" data-k="active" ${z.active !== 0 ? 'checked' : ''}></td>
+    <td><input type="number" step="1" data-sz="${i}" data-k="price" value="${z.price}"></td>
+    ${isBarn() ? `<td><input type="number" step="0.0625" data-sz="${i}" data-k="hip_len" value="${z.hip_len ?? ''}" placeholder="${esc(styleVal('gambrel_lower_len') || 'style')}"></td><td><input type="number" step="0.0625" data-sz="${i}" data-k="upper_len" value="${z.upper_len ?? ''}" placeholder="${esc(styleVal('gambrel_upper_len') || 'auto')}"></td>` : ''}<td><input type="checkbox" data-sz="${i}" data-k="active" ${z.active !== 0 ? 'checked' : ''}></td>
     <td><button type="button" class="icon-btn" data-pvsize="${i}" title="Preview this size" style="${i === previewIdx ? 'border-color:var(--brand);color:var(--brand)' : ''}">👁</button></td><td><button type="button" class="icon-btn" data-rmsize="${i}">${TRASH}</button></td></tr>`).join('')}</table>
+    ${isBarn() ? '<div class="muted" style="font-size:12px;margin-top:6px">Hip / upper lengths: leave blank to use the style\'s values. Measured along the slope without overhang. Click 👁 to preview a size — the roof readout above shows each section\'s pitch and length.</div>' : ''}
     <div class="row" style="margin-top:8px"><button type="button" class="btn ghost sm" id="addSize">+ Add size</button>
     <span class="muted" style="margin-left:auto">Fill prices:</span><input class="in" id="ppsf" type="number" placeholder="$/sq ft" style="width:90px"><input class="in" id="pbase" type="number" placeholder="+ base $" style="width:90px"><button type="button" class="btn ghost sm" id="fillP">Apply</button></div>`;
   const optOf = id => catalog.options.find(o => o.id === Number(id)) || {};
@@ -427,14 +434,14 @@ function styleEditor(style) {
         try {
           const d = collect();
           const sz = sizes[previewIdx] || sizes[0]; if (!sz || !sz.width || !sz.depth) return;
-          const st = { ...d, id: -1, sizes: [{ ...sz, id: -1, width: Number(sz.width), depth: Number(sz.depth), price: Number(sz.price) || 0 }] };
+          const st = { ...d, id: -1, sizes: [{ ...sz, id: -1, width: Number(sz.width), depth: Number(sz.depth), price: Number(sz.price) || 0, hip_len: Number(sz.hip_len) || null, upper_len: Number(sz.upper_len) || null }] };
           const cat = { ...catalog, settings: { ...catalog.settings, roofing: roofing() }, styles: [st] };
           const cfg = defaultConfig(cat, -1, -1); cfg.roof_material = d.roof_material;
           modalScene.build(cat, cfg);
           // live readout of each roof section at the previewed size
           const secs = roofSections(shedGeometry(st, st.sizes[0]));
           const ftin = v => { const t = Math.round(v * 12 * 4) / 4, f = Math.floor(t / 12), i = t - f * 12; return `${f}' ${i}"`; };
-          const names = secs.length === 4 ? ['Lower', 'Upper', 'Upper', 'Lower'] : secs.length === 2 ? (d.roof_type === 'saltbox' ? ['Long slope', 'Short slope'] : ['Each side', 'Each side']) : ['Roof'];
+          const names = secs.length === 4 ? ['Hip (lower)', 'Upper', 'Upper', 'Hip (lower)'] : secs.length === 2 ? (d.roof_type === 'saltbox' ? ['Long slope', 'Short slope'] : ['Each side', 'Each side']) : ['Roof'];
           const seen = new Set();
           $('#roofInfo', root).innerHTML = `<b>Roof sections at ${sz.width}' × ${sz.depth}'</b> (along the slope, without overhang): ` +
             secs.map((x, i) => ({ x, n: names[i] })).filter(r => !seen.has(r.n) && seen.add(r.n))
@@ -444,14 +451,19 @@ function styleEditor(style) {
       let t; const later = () => { clearTimeout(t); t = setTimeout(preview, 200); };
       wireInputs(root, later);
       const redrawSizes = () => { $('#sizesBox', root).innerHTML = sizesHTML(); later(); };
+      $('[name=roof_type]', root).addEventListener('change', () => redrawSizes());
       const redrawAvail = () => { $('#availBox', root).innerHTML = availHTML(); };
       const redrawStd = () => { $('#stdBox', root).innerHTML = stdHTML(); redrawAvail(); later(); };
       root.addEventListener('input', e => {
         const d = e.target.dataset;
         if (d.sz !== undefined) { sizes[d.sz][d.k] = d.k === 'active' ? (e.target.checked ? 1 : 0) : e.target.value; later(); }
         if (d.std !== undefined) { stds[d.std][d.k] = d.k === 'gable' ? e.target.checked : e.target.value; later(); }
-        if (e.target.name === 'av_mode') { avail = e.target.value === 'pick' ? catalog.options.map(o => o.id) : null; redrawAvail(); }
-        if (d.av !== undefined) { const id = Number(d.av); avail = (avail || []).filter(x => x !== id); if (e.target.checked) avail.push(id); }
+        if (d.av !== undefined) {
+          const ticked = $$('[data-av]', root).filter(x => x.checked && !x.disabled).map(x => Number(x.dataset.av));
+          const free = catalog.options.filter(o => !stds.some(x => Number(x.option_id) === o.id)).map(o => o.id);
+          avail = free.every(id => ticked.includes(id)) ? null : ticked;
+          redrawAvail();
+        }
       });
       root.addEventListener('change', e => { const d = e.target.dataset; if (d.std !== undefined) { stds[d.std][d.k] = d.k === 'gable' ? e.target.checked : e.target.value; if (d.k === 'option_id') redrawStd(); else later(); } if (d.sz !== undefined && d.k === 'active') sizes[d.sz].active = e.target.checked ? 1 : 0; });
       root.addEventListener('click', e => {
@@ -462,7 +474,7 @@ function styleEditor(style) {
         if (b.id === 'fillP') { const p = Number($('#ppsf', root).value), base = Number($('#pbase', root).value) || 0; if (!p) return toast('Enter a $/sq ft'); sizes.forEach(z => (z.price = Math.round((z.width * z.depth * p + base) / 5) * 5)); redrawSizes(); }
         if (b.id === 'addStd') { stds.push({ option_id: catalog.options.find(o => o.placement === 'opening')?.id, wall: 'front', offset: 0 }); redrawStd(); }
         if (b.dataset.rmstd !== undefined) { stds.splice(Number(b.dataset.rmstd), 1); redrawStd(); }
-        if (b.id === 'avAll') { avail = catalog.options.map(o => o.id); redrawAvail(); }
+        if (b.id === 'avAll') { avail = null; redrawAvail(); }
         if (b.id === 'avNone') { avail = []; redrawAvail(); }
         if (b.dataset.cancel !== undefined) closeModal();
       });
@@ -470,7 +482,7 @@ function styleEditor(style) {
         const d = collect();
         if (!d.name) throw new Error('Name is required');
         const saved = isNew ? await api('POST', '/api/v1/styles', d) : await api('PATCH', `/api/v1/styles/${s.id}`, d);
-        await api('PUT', `/api/admin/styles/${saved.id}/sizes`, sizes.map(z => ({ ...z, width: Number(z.width), depth: Number(z.depth), price: Number(z.price) })));
+        await api('PUT', `/api/admin/styles/${saved.id}/sizes`, sizes.map(z => ({ ...z, width: Number(z.width), depth: Number(z.depth), price: Number(z.price), hip_len: Number(z.hip_len) || null, upper_len: Number(z.upper_len) || null })));
         closeModal(); toast('Style saved'); styles();
       });
       preview();
@@ -622,7 +634,14 @@ function optionEditor(row) {
   openModal({
     title: row ? `Edit ${o.name}` : 'New option',
     body: `<datalist id="swapGroups">${groups.map(g => `<option value="${esc(g)}">`).join('')}</datalist>
-      <div class="split"><form class="form" id="of">${fields.map(f => field(f, o[f.key])).join('')}</form>
+      <div class="split"><form class="form" id="of">${fields.map(f => field(f, o[f.key])).join('')}
+        <div class="section-t">Offered on these styles</div>
+        <div class="full row" style="gap:6px 16px" id="optStyles">${catalog.styles.map(st => {
+          const std = row && (st.standard_options || []).some(x => Number(x.option_id) === row.id);
+          const on = !row ? !Array.isArray(st.available_options) : (std || !Array.isArray(st.available_options) || st.available_options.map(Number).includes(row.id));
+          return `<label class="chk"><input type="checkbox" data-ost="${st.id}" ${on ? 'checked' : ''} ${std ? 'disabled title="Standard on this style"' : ''}>${esc(st.name)}${std ? ' <span class="muted">(standard)</span>' : ''}</label>`;
+        }).join('')}</div>
+        <div class="full muted" style="font-size:12px">Untick a style to hide this option there. Same setting as “Options offered on this style” in the style editor.</div></form>
       <div><div class="preview3d" id="pv"><div class="pv-note">3D preview</div></div>
       <div class="callout" style="margin-top:12px">Tip: For your own models, export a <b>.glb</b> with the front facing <b>+Z</b> and Y up. It will be stretched to the width × height × depth you enter, so match those to the real product.</div></div></div>`,
     foot: `<span></span><div class="row"><button class="btn ghost" data-cancel>Cancel</button><button class="btn primary" id="osave">Save option</button></div>`,
@@ -641,7 +660,22 @@ function optionEditor(row) {
       $('#osave', root).onclick = guard(async () => {
         const d = readFields($('#of', root), fields);
         if (!d.name) throw new Error('Name is required');
-        row ? await api('PATCH', `/api/v1/options/${row.id}`, d) : await api('POST', '/api/v1/options', d);
+        const saved = row ? await api('PATCH', `/api/v1/options/${row.id}`, d) : await api('POST', '/api/v1/options', d);
+        const id = Number(saved?.id ?? row?.id);
+        // per-style availability
+        for (const el of $$('[data-ost]', root)) {
+          if (el.disabled) continue;
+          const st = catalog.styles.find(x => x.id === Number(el.dataset.ost)); if (!st) continue;
+          const list = Array.isArray(st.available_options) ? st.available_options.map(Number) : null;
+          const has = !list || list.includes(id);
+          if (el.checked === has) continue;
+          let next;
+          if (el.checked) next = [...list, id];
+          else next = (list || catalog.options.map(o => o.id).concat(row ? [] : [id])).filter(x => x !== id);
+          const allIds = catalog.options.map(o => o.id).concat(row ? [] : [id]);
+          if (allIds.every(x => next.includes(x))) next = null; // everything offered again
+          await api('PATCH', `/api/v1/styles/${st.id}`, { available_options: next });
+        }
         closeModal(); toast('Option saved'); options();
       });
       preview();
