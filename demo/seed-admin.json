@@ -63,6 +63,7 @@
     "rake_cap_size": null,
     "drip_edge_size": null,
     "drip_edge_color": "roof",
+    "available_options": null,
     "sizes": [
      {
       "id": 1,
@@ -164,12 +165,12 @@
      {
       "option_id": 8,
       "wall": "front",
-      "offset": -3.6
+      "offset": -3.95
      },
      {
       "option_id": 8,
       "wall": "front",
-      "offset": 3.6
+      "offset": 3.95
      },
      {
       "option_id": 19,
@@ -200,6 +201,7 @@
     "rake_cap_size": null,
     "drip_edge_size": null,
     "drip_edge_color": "roof",
+    "available_options": null,
     "sizes": [
      {
       "id": 9,
@@ -292,7 +294,7 @@
      {
       "option_id": 11,
       "wall": "front",
-      "offset": 1.75
+      "offset": 2
      }
     ],
     "default_colors": {
@@ -318,6 +320,7 @@
     "rake_cap_size": null,
     "drip_edge_size": null,
     "drip_edge_color": "roof",
+    "available_options": null,
     "sizes": [
      {
       "id": 16,
@@ -432,6 +435,7 @@
     "rake_cap_size": null,
     "drip_edge_size": null,
     "drip_edge_color": "roof",
+    "available_options": null,
     "sizes": [
      {
       "id": 22,
@@ -852,7 +856,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 0
+    "sort": 0,
+    "gable_mode": ""
    },
    {
     "id": 2,
@@ -873,7 +878,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 1
+    "sort": 1,
+    "gable_mode": ""
    },
    {
     "id": 3,
@@ -894,7 +900,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 2
+    "sort": 2,
+    "gable_mode": ""
    },
    {
     "id": 4,
@@ -915,7 +922,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 3
+    "sort": 3,
+    "gable_mode": ""
    },
    {
     "id": 5,
@@ -936,7 +944,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 4
+    "sort": 4,
+    "gable_mode": ""
    },
    {
     "id": 6,
@@ -957,7 +966,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 5
+    "sort": 5,
+    "gable_mode": ""
    },
    {
     "id": 7,
@@ -978,7 +988,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 6
+    "sort": 6,
+    "gable_mode": ""
    },
    {
     "id": 20,
@@ -999,7 +1010,8 @@
     "plan_label": null,
     "max_qty": 1,
     "active": 1,
-    "sort": 0
+    "sort": 0,
+    "gable_mode": ""
    },
    {
     "id": 21,
@@ -1020,7 +1032,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 1
+    "sort": 1,
+    "gable_mode": ""
    },
    {
     "id": 22,
@@ -1041,7 +1054,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 2
+    "sort": 2,
+    "gable_mode": ""
    },
    {
     "id": 16,
@@ -1062,7 +1076,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 4
+    "sort": 4,
+    "gable_mode": ""
    },
    {
     "id": 12,
@@ -1083,7 +1098,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 0
+    "sort": 0,
+    "gable_mode": ""
    },
    {
     "id": 13,
@@ -1104,7 +1120,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 1
+    "sort": 1,
+    "gable_mode": ""
    },
    {
     "id": 14,
@@ -1125,7 +1142,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 2
+    "sort": 2,
+    "gable_mode": ""
    },
    {
     "id": 15,
@@ -1146,7 +1164,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 3
+    "sort": 3,
+    "gable_mode": ""
    },
    {
     "id": 17,
@@ -1167,7 +1186,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 0
+    "sort": 0,
+    "gable_mode": ""
    },
    {
     "id": 18,
@@ -1188,7 +1208,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 1
+    "sort": 1,
+    "gable_mode": ""
    },
    {
     "id": 19,
@@ -1209,7 +1230,8 @@
     "plan_label": null,
     "max_qty": 2,
     "active": 1,
-    "sort": 2
+    "sort": 2,
+    "gable_mode": ""
    },
    {
     "id": 23,
@@ -1230,7 +1252,8 @@
     "plan_label": null,
     "max_qty": 1,
     "active": 1,
-    "sort": 0
+    "sort": 0,
+    "gable_mode": ""
    },
    {
     "id": 24,
@@ -1251,7 +1274,8 @@
     "plan_label": null,
     "max_qty": 1,
     "active": 1,
-    "sort": 1
+    "sort": 1,
+    "gable_mode": ""
    },
    {
     "id": 25,
@@ -1272,7 +1296,8 @@
     "plan_label": null,
     "max_qty": 1,
     "active": 1,
-    "sort": 2
+    "sort": 2,
+    "gable_mode": ""
    },
    {
     "id": 26,
@@ -1293,7 +1318,8 @@
     "plan_label": null,
     "max_qty": 1,
     "active": 1,
-    "sort": 3
+    "sort": 3,
+    "gable_mode": ""
    },
    {
     "id": 8,
@@ -1314,7 +1340,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 0
+    "sort": 0,
+    "gable_mode": "allow"
    },
    {
     "id": 9,
@@ -1335,7 +1362,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 1
+    "sort": 1,
+    "gable_mode": ""
    },
    {
     "id": 10,
@@ -1356,7 +1384,8 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 2
+    "sort": 2,
+    "gable_mode": ""
    },
    {
     "id": 11,
@@ -1377,7 +1406,30 @@
     "plan_label": null,
     "max_qty": 10,
     "active": 1,
-    "sort": 3
+    "sort": 3,
+    "gable_mode": "allow"
+   },
+   {
+    "id": 27,
+    "name": "Gable Window (24\" x 16\")",
+    "description": "Small fixed window up in the gable end.",
+    "category": "windows",
+    "kind": "window",
+    "placement": "opening",
+    "swap_group": "window",
+    "width": 2,
+    "height": 1.33,
+    "depth": 0.3,
+    "elevation": 0,
+    "price": 145,
+    "price_unit": "each",
+    "model_url": null,
+    "image_url": null,
+    "plan_label": null,
+    "max_qty": 10,
+    "active": 1,
+    "sort": 99,
+    "gable_mode": "only"
    }
   ],
   "settings": {
@@ -1455,7 +1507,7 @@
    "dealers": [
     {
      "id": "lot1",
-     "name": "Sample Lot – Main Street",
+     "name": "Sample Lot \u2013 Main Street",
      "address": "100 Main St",
      "city": "Example City",
      "state": "TN",
@@ -1466,7 +1518,7 @@
     },
     {
      "id": "lot2",
-     "name": "Sample Lot – Highway 45",
+     "name": "Sample Lot \u2013 Highway 45",
      "address": "2000 Hwy 45",
      "city": "Sample Town",
      "state": "TN",
@@ -1547,7 +1599,7 @@
   "dealers": [
    {
     "id": "lot1",
-    "name": "Sample Lot – Main Street",
+    "name": "Sample Lot \u2013 Main Street",
     "address": "100 Main St",
     "city": "Example City",
     "state": "TN",
@@ -1558,7 +1610,7 @@
    },
    {
     "id": "lot2",
-    "name": "Sample Lot – Highway 45",
+    "name": "Sample Lot \u2013 Highway 45",
     "address": "2000 Hwy 45",
     "city": "Sample Town",
     "state": "TN",

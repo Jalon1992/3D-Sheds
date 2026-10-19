@@ -76,7 +76,10 @@ Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side
 
 - **Sizes:** width × depth with a base price each. Use *Fill prices* to set every size from a $/sq ft + base amount, then tweak.
 - **Standard options:** items already on the shed and included in the base price (e.g. a 36" door on the front). Pick the option, the wall and an offset in feet from the wall's centre (viewed from outside, + is right). Optional **width/height** columns resize a door or window for just that style; leave them blank to use the option's own size. Customers who swap a standard item pay only the difference.
+- **Options offered on this style:** leave it on *Every option*, or switch to *Only the options ticked below* and tick what this style offers (e.g. no lofts on the garage). Customers only see the ticked options, switching styles drops items the new style doesn't offer, and the server enforces it on every quote. The style's standard options are always included.
 - **Default colors** per style.
+
+**Roof trim rules:** shingle roofs get no metal trim at all: shingle ridge caps, shingles lapping over the gambrel break, and a trim-color rake board (no metal rake edge or drip edge). Metal roofs keep the metal ridge cap, transition trim and rake trim. On every style the rake/fly-rafter tails are cut plumb, then cut **flat (level) at the bottom of the fascia**, so nothing hangs below it. That matters most on the steep lower slope of the Lofted Barn.
 
 ### Roofing (Architectural Shingles / Ag Panel Metal)
 Admin → **Roofing & colors → Roofing materials**: rename, describe and price each roofing type: per sq ft of **roof surface** (calculated from pitch and overhangs), per sq ft of floor, or flat. On each style choose the **standard roofing** (included in the base price) and which roofing types customers can pick; picking a different one charges the difference. Each roof color can be limited to shingles or metal (e.g. Galvalume only shows for Ag Panel).
@@ -100,7 +103,13 @@ Every option has a category, price, size and a **placement**:
 
 **Pricing units:** each, per ft of the wall it's on, per ft of width/depth/perimeter, or per sq ft of floor.
 
-**Door & window sizes:** each option's width × height (and height off the floor) is set in its editor with a live preview; per-style sizes can be overridden in the style's standard options.
+**Door & window sizes:** each option's width × height is set in its editor with a live preview; per-style sizes can be overridden in the style's standard options.
+
+**Standard window heights:** Options → Windows has a *Standard window heights* table. For each window type, enter the bottom or the top in inches above the floor (the other follows). The option editor shows the same as *Standard height*, with the top and head-trim heights worked out for you.
+
+**Gable windows:** each window/vent has *Can it go up in the gable?*: **No** (walls only), **Yes** (the customer gets *On the wall / Up in the gable* buttons when it's on a gable end) or **Gable only**. Up in the gable, the window is centred between the top of the wall and the rake. If it's too tall for that gable, the customer is told so and it stays put. Standard options have an *In gable* tick too. A sample *Gable Window (24" × 16")* is included.
+
+**No overlaps:** doors, windows and everything else on a wall can't overlap, **trim included**: door/window casings, sills and shutters are counted, and openings stay clear of the corner boards. Dragging stops at the last free spot. Swapping to something bigger, or changing size/style, slides items to the nearest free spot, or tells the customer what had to be removed.
 
 **Swap group:** options with the same swap group (e.g. `door`, `window`) appear as upgrade choices when the customer clicks that item on the model.
 

@@ -122,6 +122,7 @@ export function defaultConfig(catalog, styleId, sizeId) {
     offset: Number(s.offset) || 0,
     ...(Number(s.w) > 0 ? { w: Number(s.w) } : {}),
     ...(Number(s.h) > 0 ? { h: Number(s.h) } : {}),
+    ...(s.gable ? { gable: true } : {}),
     standard_of: s.option_id,
   }));
   const choices = roofChoices(catalog, style);
@@ -227,6 +228,16 @@ export function priceConfig(catalog, config) {
 }
 
 /** Validate/sanitise a config coming from an untrusted client. */
+/** Is this option offered on this style? style.available_options = list of option ids (null/absent = all).
+ *  The style's own standard options are always available. */
+export function optionAvailable(style, opt) {
+  if (!style || !opt) return false;
+  const list = style.available_options;
+  if (!Array.isArray(list)) return true;
+  if ((style.standard_options || []).some(s => Number(s.option_id) === Number(opt.id))) return true;
+  return list.map(Number).includes(Number(opt.id));
+}
+
 export function sanitizeConfig(catalog, raw) {
   const style = catalog.styles.find(s => s.id === Number(raw?.style_id));
   if (!style) throw new Error('style_id is invalid');
@@ -243,8 +254,9 @@ export function sanitizeConfig(catalog, raw) {
     if (!colorGroupEnabled(catalog, k)) { if (defaults[k]) colors[k] = defaults[k]; continue; }
     if (colorIds.has(v)) colors[k] = v;
   }
+  const optById = Object.fromEntries(catalog.options.map(o => [o.id, o]));
   const items = (Array.isArray(raw.items) ? raw.items : []).slice(0, 200)
-    .filter(i => optIds.has(Number(i.option_id)))
+    .filter(i => optIds.has(Number(i.option_id)) && optionAvailable(style, optById[Number(i.option_id)]))
     .map((i, n) => ({
       uid: String(i.uid || 'i' + n).slice(0, 40),
       option_id: Number(i.option_id),
@@ -254,6 +266,7 @@ export function sanitizeConfig(catalog, raw) {
       ...(Number(i.w) > 0 ? { w: clampNum(i.w, 0.25, 40) } : {}),
       ...(Number(i.h) > 0 ? { h: clampNum(i.h, 0.25, 20) } : {}),
       standard_of: optIds.has(Number(i.standard_of)) ? Number(i.standard_of) : null,
+      ...(i.gable && optById[Number(i.option_id)]?.gable_mode === 'allow' ? { gable: true } : {}),
     }));
   // Standard slots must actually be standard for this style
   const std = new Set((style.standard_options || []).map(s => s.option_id));

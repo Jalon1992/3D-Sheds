@@ -74,8 +74,23 @@ export function elevationSVG(catalog, config, wall, opts = {}) {
     o.push(`<polygon points="${[...pts, ...upper.slice().reverse()].map(([u, y]) => `${X(u)},${Y(y)}`).join(' ')}" fill="${roofFill}" stroke="${roofStroke}" stroke-width="1.5"/>`);
     // rake trim band
     const rk = (style.roof_edge === 'board_drip' || !isMetal ? (style.rake_size ?? 5.5) : (style.metal_rake_size ?? 5.5)) / 12;
-    const low = pts.map(([u, y]) => [u, y - rk + th]);
-    o.push(`<polyline points="${low.map(([u, y]) => `${X(u)},${Y(y)}`).join(' ')}" fill="none" stroke="${roofStroke}" stroke-width="1" stroke-dasharray="0"/>`);
+    // rake bottom edge, with the tails cut plumb then LEVEL at the bottom of the fascia (no point hanging below)
+    const fasciaH = (style.fascia_size ?? 5.5) / 12;
+    // rake depth is measured square to the slope, so its plumb depth is rk / cos(pitch)
+    const sec = i => { const a = pts[Math.min(i, pts.length - 2)], b = pts[Math.min(i, pts.length - 2) + 1]; return Math.hypot(b[0] - a[0], b[1] - a[1]) / Math.max(1e-6, Math.abs(b[0] - a[0])); };
+    let low = pts.map(([u, y], i) => {
+      const k = i === 0 ? sec(0) : i === pts.length - 1 ? sec(pts.length - 2) : Math.min(sec(i - 1), sec(i));
+      return [u, y + th - rk * k];
+    });
+    const cutEnd = (line, end, prev, edge) => {
+      const yCut = edge[1] + th - fasciaH, b = line[end], a = line[prev];
+      if (b[1] >= yCut || a[1] <= yCut) return [b, [edge[0], b[1]]];
+      const t = (yCut - b[1]) / (a[1] - b[1]);
+      return [[b[0] + (a[0] - b[0]) * t, yCut], [edge[0], yCut]];
+    };
+    const n = low.length - 1, L0 = cutEnd(low, 0, 1, pts[0]), L1 = cutEnd(low, n, n - 1, pts[n]);
+    low = [[pts[0][0], pts[0][1] + th], L0[1], L0[0], ...low.slice(1, n), L1[0], L1[1], [pts[n][0], pts[n][1] + th]];
+    o.push(`<polyline points="${low.map(([u, y]) => `${X(u)},${Y(y)}`).join(' ')}" fill="none" stroke="${roofStroke}" stroke-width="1"/>`);
   } else {
     // roof seen from the eave side: horizontal bands between the profile heights
     const hs = [...new Set(geo.profile.map(p => +(F + H + p[1]).toFixed(4)))].sort((a, b) => a - b);

@@ -83,10 +83,10 @@ export function seed() {
   opt('roll6', { name: "6' x 6' Roll-Up Door", category: 'doors', kind: 'door_rollup', placement: 'opening', swap_group: 'door', width: 6, height: 6, price: 895, sort: s++ });
   opt('roll8', { name: "8' x 7' Roll-Up Door", category: 'doors', kind: 'door_rollup', placement: 'opening', swap_group: 'door', width: 8, height: 7, price: 1295, sort: s++ });
   s = 0;
-  opt('win23', { name: '2\' x 3\' Window', category: 'windows', kind: 'window', placement: 'opening', swap_group: 'window', width: 2, height: 3, elevation: 3.5, price: 155, sort: s++ });
+  opt('win23', { name: '2\' x 3\' Window', category: 'windows', kind: 'window', placement: 'opening', swap_group: 'window', gable_mode: 'allow', width: 2, height: 3, elevation: 3.5, price: 155, sort: s++ });
   opt('win33', { name: '3\' x 3\' Window', category: 'windows', kind: 'window', placement: 'opening', swap_group: 'window', width: 3, height: 3, elevation: 3.5, price: 195, sort: s++ });
   opt('winsh', { name: 'Window w/ Shutters', category: 'windows', kind: 'window_shutters', placement: 'opening', swap_group: 'window', width: 2, height: 3, elevation: 3.5, price: 235, sort: s++ });
-  opt('transom', { name: 'Transom Window', category: 'windows', kind: 'window_transom', placement: 'opening', swap_group: 'window', width: 3, height: 1.25, elevation: 5.5, price: 175, sort: s++ });
+  opt('transom', { name: 'Transom Window', category: 'windows', kind: 'window_transom', placement: 'opening', swap_group: 'window', gable_mode: 'allow', width: 3, height: 1.25, elevation: 5.5, price: 175, sort: s++ });
   opt('vent', { name: 'Gable Vent', category: 'exterior', kind: 'vent', placement: 'opening', swap_group: 'vent', width: 1.5, height: 1, elevation: -1, price: 45, sort: 0, description: 'Auto-placed high in the gable.' });
   opt('flower', { name: 'Flower Box', category: 'exterior', kind: 'flowerbox', placement: 'wall_exterior', width: 2.5, height: 0.7, depth: 0.75, elevation: 2.7, price: 95, sort: 1 });
   opt('ramp', { name: 'Wood Ramp', category: 'exterior', kind: 'ramp', placement: 'ground', width: 4, height: 0.7, depth: 3.5, price: 295, sort: 2 });
@@ -105,6 +105,7 @@ export function seed() {
   opt('radiant', { name: 'Radiant Barrier Roof', category: 'upgrades', kind: 'none', placement: 'none', price: 1.25, price_unit: 'per_sqft', max_qty: 1, sort: s++ });
   opt('floor', { name: '3/4" Floor Upgrade', category: 'upgrades', kind: 'none', placement: 'none', price: 0.85, price_unit: 'per_sqft', max_qty: 1, sort: s++ });
   opt('anchor', { name: 'Anchor Kit', category: 'upgrades', kind: 'none', placement: 'none', price: 175, max_qty: 1, sort: s++ });
+  opt('gablewin', { name: 'Gable Window (24" x 16")', description: 'Small fixed window up in the gable end.', category: 'windows', kind: 'window', placement: 'opening', swap_group: 'window', gable_mode: 'only', width: 2, height: 1.33, elevation: 0, price: 145, sort: 99 });
 
   // ---- Styles + sizes
   const style = (st, sizes, perSqft, baseAdd) => {
@@ -121,13 +122,13 @@ export function seed() {
     name: 'Lofted Barn', description: 'Gambrel roof with extra headroom and a built-in loft.', roof_type: 'barn', ridge_axis: 'width',
     wall_height: 7, roof_pitch: 5, roof_pitch_lower: 18, gambrel_lower_len: 3.25, overhang: 0.6, siding_type: 'lp_smartside', roof_material: 'shingle', sort: 1,
     default_colors: { siding: C['Barn Red:siding'], trim: C['White:trim'], roof: C['Weathered Wood:roof'], door: C['Match Trim:door'] },
-    standard_options: [{ option_id: O.dbl4, wall: 'front', offset: 0 }, { option_id: O.win23, wall: 'front', offset: -3.6 }, { option_id: O.win23, wall: 'front', offset: 3.6 }, { option_id: O.loft, wall: 'left', offset: 0 }],
+    standard_options: [{ option_id: O.dbl4, wall: 'front', offset: 0 }, { option_id: O.win23, wall: 'front', offset: -3.95 }, { option_id: O.win23, wall: 'front', offset: 3.95 }, { option_id: O.loft, wall: 'left', offset: 0 }],
   }, [[12, 10], [14, 10], [16, 10], [12, 12], [16, 12], [20, 12], [24, 12]], 40, 1600);
   style({
     name: 'Modern Lean-To', description: 'Single-slope studio look with a metal roof.', roof_type: 'lean_to', ridge_axis: 'width',
     wall_height: 7.5, roof_pitch: 2.5, overhang: 1, siding_type: 'lp_smartside', roof_material: 'metal', gable_overhang: 0.5, sort: 2,
     default_colors: { siding: C['Charcoal:siding'], trim: C['Black:trim'], roof: C['Black:roof'], door: C['Natural Wood:door'] },
-    standard_options: [{ option_id: O.door9lite, wall: 'front', offset: -2 }, { option_id: O.transom, wall: 'front', offset: 1.75 }],
+    standard_options: [{ option_id: O.door9lite, wall: 'front', offset: -2 }, { option_id: O.transom, wall: 'front', offset: 2 }],
   }, [[10, 8], [12, 8], [10, 10], [12, 10], [14, 10], [16, 12]], 48, 1800);
   style({
     name: 'Garage', description: 'Tall walls and a roll-up door for mowers, ATVs and workshops.', roof_type: 'gable', ridge_axis: 'depth',

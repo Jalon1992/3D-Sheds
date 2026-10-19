@@ -103,10 +103,12 @@ for (const sql of [
   'ALTER TABLE quotes ADD COLUMN dealer_name TEXT',
   'ALTER TABLE quotes ADD COLUMN price_tier TEXT',
   'ALTER TABLE quotes ADD COLUMN pricing_zip TEXT',
+  'ALTER TABLE styles ADD COLUMN available_options TEXT',
+  `ALTER TABLE options ADD COLUMN gable_mode TEXT DEFAULT ''`,
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------
-export const JSON_COLS = new Set(['standard_options', 'default_colors', 'roof_choices', 'roofing', 'price_tiers', 'dealers', 'zip_tiers', 'events', 'headers', 'config', 'pricing', 'utm']);
+export const JSON_COLS = new Set(['standard_options', 'default_colors', 'roof_choices', 'available_options', 'roofing', 'price_tiers', 'dealers', 'zip_tiers', 'events', 'headers', 'config', 'pricing', 'utm']);
 
 export function parseRow(row) {
   if (!row) return row;

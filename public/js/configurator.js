@@ -1,7 +1,7 @@
 // Customer-facing configurator: Style → Size → Colors → Options → Quote.
 import { ShedScene } from './shed3d.js';
-import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList } from './shared/pricing.js';
-import { shedGeometry, findSpot, canPlace } from './shared/geometry.js';
+import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList, optionAvailable } from './shared/pricing.js';
+import { shedGeometry, findSpot, canPlace, resolvePlacement, gableMode } from './shared/geometry.js';
 import { floorPlanSVG } from './shared/floorplan.js';
 import { buildDrawingPackage } from './drawings.js';
 
@@ -108,6 +108,7 @@ $('#panel').addEventListener('input', e => {
   }
 });
 
+const avail = o => optionAvailable(curStyle(), o) && o.active !== 0;
 function pricing() { try { return priceConfig(state.catalog, state.config); } catch { return null; } }
 function rebuild() {
   scene.build(state.catalog, state.config);
@@ -139,7 +140,7 @@ function optDelta(o, it) {
 // Item operations
 // ---------------------------------------------------------------------------
 function preferredWall(o) {
-  if (o.kind === 'vent') return WALLS.find(w => geo().isGable(w));
+  if (o.kind === 'vent' || gableMode(o) === 'only') return WALLS.find(w => geo().isGable(w));
   if (o.placement === 'loft') {
     const ends = WALLS.filter(w => geo().isGable(w));
     return ends.find(w => !state.config.items.some(i => i.wall === w && optById[i.option_id]?.placement === 'loft')) || ends[0];
@@ -172,7 +173,7 @@ function addOption(o) {
   }
   if (!spot) spot = findSpot(geo(), optById, items, o, preferredWall(o));
   if (!spot) return toast(`No room left for ${o.name} — try a bigger size or move something.`);
-  const it = { uid: newUid(), option_id: o.id, wall: spot.wall, offset: spot.offset };
+  const it = { uid: newUid(), option_id: o.id, wall: spot.wall, offset: spot.offset, ...(spot.gable ? { gable: true } : {}) };
   items.push(it);
   if (['wall_interior', 'loft', 'ceiling'].includes(o.placement) && !state.interior) setInterior(true);
   rebuild(); selectItem(it.uid); renderPanel();
@@ -187,11 +188,13 @@ function swapItem(uid, newId) {
   const it = state.config.items.find(i => i.uid === uid); const o = optById[newId];
   if (!it || !o) return;
   const prev = it.option_id, prevW = it.w, prevH = it.h;
+  const prevG = it.gable;
   it.option_id = newId; delete it.w; delete it.h;
+  if (gableMode(o) === 'only') it.gable = true; else if (gableMode(o) !== 'allow') delete it.gable;
   if (!canPlace(geo(), optById, state.config.items, o, it, uid)) {
-    const spot = findSpot(geo(), optById, state.config.items, o, it.wall, it.offset, uid);
-    if (!spot) { it.option_id = prev; if (prevW) it.w = prevW; if (prevH) it.h = prevH; return toast(`${o.name} doesn't fit here — remove or move something first.`); }
-    Object.assign(it, spot);
+    const spot = findSpot(geo(), optById, state.config.items, o, it.wall, it.offset, uid, { gable: it.gable });
+    if (!spot) { it.option_id = prev; if (prevW) it.w = prevW; if (prevH) it.h = prevH; if (prevG) it.gable = prevG; else delete it.gable; return toast(`${o.name} doesn't fit here — remove or move something first.`); }
+    Object.assign(it, spot); if (!it.gable) delete it.gable;
   }
   rebuild(); selectItem(uid); renderPanel();
 }
@@ -211,21 +214,35 @@ function moveToWall(uid, wall) {
   const it = state.config.items.find(i => i.uid === uid); const o = optById[it.option_id];
   if (o.kind === 'vent' && !geo().isGable(wall)) return toast('Gable vents only fit on the gable ends');
   if (o.placement === 'loft' && !geo().isGable(wall)) return toast('Lofts go on an end wall');
-  const spot = findSpot(geo(), optById, state.config.items.filter(i => i.uid !== uid), o, wall, 0, uid);
+  if (gableMode(o) === 'only' && !geo().isGable(wall)) return toast(`${o.name} only fits up in a gable end`);
+  const wantGable = it.gable && geo().isGable(wall);
+  const spot = findSpot(geo(), optById, state.config.items.filter(i => i.uid !== uid), o, wall, 0, uid, { w: it.w, h: it.h, gable: wantGable });
   if (!spot || spot.wall !== wall) return toast(`No room on the ${wall} wall`);
-  Object.assign(it, spot);
+  Object.assign(it, spot); if (!it.gable) delete it.gable;
   if (['wall_interior', 'loft'].includes(o.placement) && !state.interior) setInterior(true);
   rebuild(); selectItem(uid); showWall(wall); renderPanel();
 }
 /** Make sure every item still fits after a style/size change; move or drop what doesn't. */
+function setGable(uid, on) {
+  const it = state.config.items.find(i => i.uid === uid); const o = optById[it.option_id];
+  const cand = { ...it, gable: on || undefined };
+  if (!canPlace(geo(), optById, state.config.items, o, cand, uid)) {
+    const spot = findSpot(geo(), optById, state.config.items, o, it.wall, it.offset, uid, { w: it.w, h: it.h, gable: on });
+    if (!spot || spot.wall !== it.wall || !!spot.gable !== on) return toast(on ? `Not enough room in the gable for ${o.name} at this size` : `No room on the ${it.wall} wall below the gable`);
+    Object.assign(cand, spot);
+  }
+  Object.assign(it, cand); if (!it.gable) delete it.gable;
+  rebuild(); selectItem(uid); renderPanel();
+}
 function fitItems(announce) {
   const g = geo(); const keep = [], moved = [], dropped = [];
   for (const it of state.config.items) {
     const o = optById[it.option_id];
+    if (!avail(o) && !(it.standard_of && it.standard_of === it.option_id)) { dropped.push(o.name + ' (not offered on this style)'); continue; }
     const wallOk = !(o.placement === 'loft' && !g.isGable(it.wall));
     if (!it.wall || !WALLS.includes(it.wall) || (wallOk && canPlace(g, optById, keep, o, it, it.uid))) { keep.push(it); continue; }
-    const spot = findSpot(g, optById, keep, o, it.wall, it.offset, it.uid);
-    if (spot) { keep.push({ ...it, ...spot }); if (spot.wall !== it.wall) moved.push(`${o.name} → ${spot.wall} wall`); }
+    const spot = findSpot(g, optById, keep, o, it.wall, it.offset, it.uid, { w: it.w, h: it.h, gable: it.gable && g.isGable(it.wall) });
+    if (spot) { const n = { ...it, ...spot }; if (!n.gable) delete n.gable; keep.push(n); if (spot.wall !== it.wall) moved.push(`${o.name} → ${spot.wall} wall`); }
     else dropped.push(o.name);
   }
   state.config.items = keep;
@@ -250,15 +267,15 @@ function dragItem(uid, hit) {
     it.offset = offset; queueRebuild(uid); return;
   }
   if (!WALLS.includes(wall)) return;
-  if (o.kind === 'vent' && !g.isGable(wall)) return;
+  if ((o.kind === 'vent' || gableMode(o) === 'only') && !g.isGable(wall)) return;
   if (o.placement === 'loft') { if (wall === it.wall || !g.isGable(wall)) return; if (state.config.items.some(i => i.uid !== uid && i.wall === wall && optById[i.option_id]?.placement === 'loft')) return; it.wall = wall; it.offset = 0; queueRebuild(uid); return; }
   // clamp into the wall so dragging past a corner edge still slides it to the end
-  const L = g.wallLen(wall), half = (Number(it.w) || Number(o.width) || 1) / 2, m = 0.45;
-  offset = Math.max(-L / 2 + m + half, Math.min(L / 2 - m - half, offset));
+  const gable = it.gable && g.isGable(wall) ? true : undefined;
+  offset = resolvePlacement(g, o, { ...it, wall, offset, gable }).offset;
   if (wall === it.wall && offset === it.offset) return;
-  const cand = { ...it, wall, offset };
+  const cand = { ...it, wall, offset, gable };
   if (!canPlace(g, optById, state.config.items, o, cand, uid)) return; // blocked: stay at last good spot
-  it.wall = wall; it.offset = offset; queueRebuild(uid);
+  it.wall = wall; it.offset = offset; if (gable) it.gable = true; else delete it.gable; queueRebuild(uid);
 }
 function queueRebuild(uid) {
   if (dragQueued) return;
@@ -280,7 +297,7 @@ function selectItem(uid) {
   const it = uid && state.config.items.find(i => i.uid === uid);
   if (!it) { card.hidden = true; return; }
   const o = optById[it.option_id];
-  const alts = state.catalog.options.filter(x => x.active !== 0 && (o.swap_group ? x.swap_group === o.swap_group : (x.category === o.category && x.placement === o.placement)));
+  const alts = state.catalog.options.filter(x => (avail(x) || x.id === o.id) && (o.swap_group ? x.swap_group === o.swap_group : (x.category === o.category && x.placement === o.placement)));
   const isStd = it.standard_of && it.standard_of === it.option_id;
   const price = optDelta(o, it);
   const isLoft = o.placement === 'loft';
@@ -302,9 +319,11 @@ function selectItem(uid) {
     }).join('')}</div>` : ''}
     ${isLoft ? `<div class="ic-label">Which end?</div><div class="ic-row"><div class="walls">${ends.map(w => `<button data-wall="${w}" class="${it.wall === w ? 'on' : ''}" ${loftOn(w) ? 'disabled title="There is already a loft on this end"' : ''}>${w} end</button>`).join('')}</div></div>` : ''}
     ${(wallable || movable) ? `<div class="ic-label">Position</div><div class="ic-row">
-      ${wallable ? `<div class="walls">${WALLS.map(w => `<button data-wall="${w}" class="${it.wall === w ? 'on' : ''}">${w}</button>`).join('')}</div>` : ''}
+      ${wallable ? `<div class="walls">${WALLS.map(w => { const no = gableMode(o) === 'only' && !geo().isGable(w); return `<button data-wall="${w}" class="${it.wall === w ? 'on' : ''}" ${no ? 'disabled title="Gable ends only"' : ''}>${w}</button>`; }).join('')}</div>` : ''}
       ${movable ? `<div class="mv"><button data-move="-1" aria-label="Move left"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><button data-move="1" aria-label="Move right"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>` : ''}
     </div>` : ''}
+    ${gableMode(o) === 'allow' && geo().isGable(it.wall) ? `<div class="ic-label">Height</div><div class="walls"><button data-gable="0" class="${it.gable ? '' : 'on'}">On the wall</button><button data-gable="1" class="${it.gable ? 'on' : ''}">Up in the gable</button></div>` : ''}
+    ${gableMode(o) === 'only' ? `<div class="ic-meta" style="margin-top:8px">Sits up in the gable end.</div>` : ''}
     <div class="ic-foot"><button class="link-danger" data-act="remove">Remove${removedCredit && showPrices() ? ` (${fmt(removedCredit)})` : ''}</button>
       <button class="btn primary sm" data-act="close">Done</button></div>`;
   card.hidden = false;
@@ -317,6 +336,7 @@ $('#itemcard').addEventListener('click', e => {
   else if (b.dataset.swap) swapItem(uid, Number(b.dataset.swap));
   else if (b.dataset.wall) moveToWall(uid, b.dataset.wall);
   else if (b.dataset.move) moveItem(uid, Number(b.dataset.move));
+  else if (b.dataset.gable !== undefined) setGable(uid, b.dataset.gable === '1');
 });
 
 // ---------------------------------------------------------------------------
@@ -422,7 +442,7 @@ function renderOptions() {
   let html = `<h2>Add options</h2><p class="sub">Standard items are already on your shed. Click anything on the 3D model to upgrade, move or remove it.</p>`;
   if (onShed.length) html += `<h3>On your shed</h3><div class="onshed">${onShed.map(i => { const o = optById[i.option_id]; return `<button class="${i.standard_of ? 'std' : ''}" data-sel="${i.uid}">${esc(o.name)}${i.wall && WALLS.includes(i.wall) ? ` · ${i.wall}` : ''}</button>`; }).join('')}</div>`;
   for (const [cat, label] of CATS) {
-    const list = state.catalog.options.filter(o => o.category === cat && o.active !== 0);
+    const list = state.catalog.options.filter(o => o.category === cat && avail(o));
     if (!list.length) continue;
     const n = list.reduce((s, o) => s + (counts[o.id] || 0), 0);
     html += `<div class="acc ${state.openCats.has(cat) ? 'open' : ''}" data-cat="${cat}"><button data-acc="${cat}">${esc(label)}${n ? `<span class="cnt">${n}</span>` : ''}<svg class="chev" viewBox="0 0 24 24" ${n ? '' : 'style="margin-left:auto"'}><path d="M6 9l6 6 6-6"/></svg></button><div class="acc-body">`;

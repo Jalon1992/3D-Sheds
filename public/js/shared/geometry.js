@@ -59,7 +59,9 @@ export function shedGeometry(style, size) {
   const peak = Math.max(...profile.map(p => p[1]));
   const eaveOv = Number(style.overhang ?? 0.75) || 0;
   const gableOv = style.gable_overhang == null || style.gable_overhang === '' ? eaveOv : Number(style.gable_overhang) || 0;
-  return { W, D, H, S, L, s, k, ridgeAlongZ, profile, prof, isGable, topAt, profileUs, peak, eaveOv, gableOv, wallLen: w => wallLength(w, size) };
+  const inch = (v, d) => (v === null || v === undefined || v === '' ? d : Number(v)) / 12;
+  const casing = inch(style.casing_trim, 4), corner = inch(style.corner_trim, 5);
+  return { W, D, H, S, L, s, k, ridgeAlongZ, profile, prof, isGable, topAt, profileUs, peak, eaveOv, gableOv, casing, corner, wallLen: w => wallLength(w, size) };
 }
 
 /** Each roof section: pitch (x/12), length along the slope and horizontal run, in ft (no overhang). */
@@ -94,40 +96,70 @@ export function itemSize(opt, item) {
   return { w, h };
 }
 
-/** Resolve where an item actually sits (clamped to the wall, under the roof line). */
+/** Gable placement: 'only' = must sit up in the gable, 'allow' = customer can choose wall or gable. */
+export function gableMode(opt) { return opt?.gable_mode === 'only' || opt?.gable_mode === 'allow' ? opt.gable_mode : ''; }
+export function inGable(geo, opt, item) {
+  if (!WALLS.includes(item.wall) || !geo.isGable(item.wall)) return false;
+  const m = gableMode(opt); return m === 'only' || (m === 'allow' && !!item.gable);
+}
+
+/** Trim around an opening (ft): side casing, head casing, sill below and sill ears past the casing. */
+function trimPad(geo, opt) {
+  if (opt.placement !== 'opening') return { side: 0, head: 0, sill: 0 };
+  const win = String(opt.kind || '').startsWith('window'), cw = geo.casing ?? 0.33;
+  let side = cw + (win ? 0.1 : 0.05);
+  if (opt.kind === 'window_shutters') side = Math.max(side, cw + (Number(opt.width) || 2) * 0.55);
+  return { side, head: cw, sill: win || opt.kind === 'vent' ? 0.12 : 0 };
+}
+
+/** Resolve where an item actually sits (clamped to the wall, clear of the corner boards, under the roof line).
+ *  fits=false means it cannot sit there at its proper size/height (e.g. a gable window that is too tall). */
 export function resolvePlacement(geo, opt, item) {
   const sz = itemSize(opt, item);
   const w = sz.w;
   let h = sz.h;
-  if (!WALLS.includes(item.wall)) return { offset: item.offset || 0, elev: Number(opt.elevation) || 0, w, h };
+  if (!WALLS.includes(item.wall)) return { offset: item.offset || 0, elev: Number(opt.elevation) || 0, w, h, fits: true };
   const L = geo.wallLen(item.wall);
-  const margin = WALL_T + 0.1;
+  const pad = trimPad(geo, opt);
+  // exterior items stay clear of the corner boards; interior items clear of the inside wall face
+  const exterior = opt.placement === 'opening' || opt.placement === 'wall_exterior' || opt.placement === 'ground';
+  const margin = (exterior ? Math.max(WALL_T + 0.1, (geo.corner ?? 0.42) - 0.06) : WALL_T + 0.1) + pad.side;
   const span = opt.placement === 'loft' ? 0 : w;
   let offset = Math.max(-L / 2 + margin + span / 2, Math.min(L / 2 - margin - span / 2, Number(item.offset) || 0));
-  if (span > L - 2 * margin) offset = 0;
+  let fits = true;
+  if (span > L - 2 * margin) { offset = 0; fits = opt.placement === 'loft'; }
   let elev = Number(opt.elevation) || 0;
   if (opt.placement === 'opening' || opt.placement === 'wall_exterior' || opt.placement === 'wall_interior') {
-    const top = Math.min(geo.topAt(item.wall, offset - w / 2), geo.topAt(item.wall, offset + w / 2));
+    const top = Math.min(geo.topAt(item.wall, offset - w / 2 - pad.side), geo.topAt(item.wall, offset + w / 2 + pad.side));
+    const maxTop = top - (opt.placement === 'opening' ? pad.head + 0.15 : 0.15);
+    if (inGable(geo, opt, item)) {
+      // centred in the gable: above the top of the wall, head trim clear of the rake board
+      const lo = geo.H + 0.15 + pad.sill, hi = maxTop - 0.15;
+      elev = Math.max(lo, lo + (hi - lo - h) / 2);
+      if (elev + h > hi + 1e-6) fits = false;
+      return { offset, elev, w, h, fits, gable: true };
+    }
     if (opt.kind === 'vent' || elev < 0) {
       const room = geo.topAt(item.wall, offset) - geo.H;
       elev = room > h + 0.8 ? geo.H + room * 0.42 - h / 2 : geo.H - h - 0.35;
     }
-    const maxTop = top - (opt.placement === 'opening' ? 0.3 : 0.15);
     if (elev + h > maxTop) elev = maxTop - h;
     if (elev < 0) { h = Math.max(0.3, h + elev); elev = 0; }
   }
-  return { offset, elev, w, h };
+  return { offset, elev, w, h, fits };
 }
 
-/** Horizontal/vertical extents occupied on a wall (for collision checks). */
+/** Space an item occupies on a wall, INCLUDING its trim (for collision checks). */
 function extents(geo, opt, item) {
   const p = resolvePlacement(geo, opt, item);
   const layer = opt.placement === 'opening' ? 'through' : opt.placement === 'wall_interior' ? 'in' : opt.placement === 'wall_exterior' ? 'out' : opt.placement === 'ground' ? 'ground' : null;
-  let pad = 0;
-  if (opt.kind === 'window_shutters') pad = p.w * 0.55;
-  return { a: p.offset - p.w / 2 - pad, b: p.offset + p.w / 2 + pad, y0: p.elev, y1: p.elev + p.h, layer };
+  const t = trimPad(geo, opt);
+  return { a: p.offset - p.w / 2 - t.side, b: p.offset + p.w / 2 + t.side, y0: p.elev - t.sill, y1: p.elev + p.h + t.head, layer, kind: opt.kind };
 }
 
+/** Nothing on a wall may overlap anything else on that wall — trim included. Inside items (shelves)
+ *  and outside items (lights, flower boxes) are on opposite faces, so they only clash with openings
+ *  and with items on their own face. Ramps only clash with other ramps. */
 function collides(geo, optById, items, opt, cand, ignoreUid) {
   const e = extents(geo, opt, cand);
   if (!e.layer) return false;
@@ -136,19 +168,20 @@ function collides(geo, optById, items, opt, cand, ignoreUid) {
     const o = optById[it.option_id]; if (!o) continue;
     const f = extents(geo, o, it);
     if (!f.layer) continue;
-    const sameLayer = f.layer === e.layer || f.layer === 'through' || e.layer === 'through';
     if (e.layer === 'ground' || f.layer === 'ground') { if (e.layer !== f.layer) continue; }
-    else if (!sameLayer) continue;
-    const gap = 0.25;
-    const hOverlap = e.a < f.b + gap && f.a < e.b + gap;
-    const vOverlap = (e.layer === 'ground') || (e.y0 < f.y1 + 0.1 && f.y0 < e.y1 + 0.1);
+    else if (!(f.layer === e.layer || f.layer === 'through' || e.layer === 'through')) continue;
+    const eps = 0.01;
+    const hOverlap = e.a < f.b - eps && f.a < e.b - eps;
+    // a flower box tucks right under a window sill
+    const vTol = (e.kind === 'flowerbox' || f.kind === 'flowerbox') ? 0.05 : eps;
+    const vOverlap = e.layer === 'ground' || (e.y0 < f.y1 - vTol && f.y0 < e.y1 - vTol);
     if (hOverlap && vOverlap) return true;
   }
   return false;
 }
 
 /** Find a free spot for a new/moved item. Tries the preferred wall first, then the others. */
-export function findSpot(geo, optById, items, opt, prefWall, prefOffset = 0, ignoreUid = null) {
+export function findSpot(geo, optById, items, opt, prefWall, prefOffset = 0, ignoreUid = null, extra = {}) {
   if (opt.placement === 'none') return { wall: null, offset: 0 };
   if (opt.placement === 'ceiling') {
     const used = items.filter(i => i.wall === 'ceiling' && i.uid !== ignoreUid).map(i => i.offset);
@@ -159,7 +192,7 @@ export function findSpot(geo, optById, items, opt, prefWall, prefOffset = 0, ign
   if (opt.placement === 'roof') return { wall: 'roof', offset: prefOffset || 0 };
   const walls = prefWall ? [prefWall, ...WALLS.filter(w => w !== prefWall)] : WALLS;
   for (const wall of walls) {
-    if (opt.kind === 'vent' && !geo.isGable(wall)) continue;
+    if ((opt.kind === 'vent' || gableMode(opt) === 'only') && !geo.isGable(wall)) continue;
     if (opt.placement === 'loft') {
       if (!geo.isGable(wall)) continue; // lofts span an end (gable) wall
       if (!items.some(i => i.wall === wall && optById[i.option_id]?.placement === 'loft' && i.uid !== ignoreUid)) return { wall, offset: 0 };
@@ -167,19 +200,21 @@ export function findSpot(geo, optById, items, opt, prefWall, prefOffset = 0, ign
     }
     const L = geo.wallLen(wall);
     if (Number(opt.width) > L - 0.8) continue;
-    for (const off of spiral(wall === prefWall ? prefOffset : 0, L / 2, 0.5)) {
-      const cand = { wall, offset: off, uid: '__cand' };
+    const g = gableMode(opt) === 'only' || (gableMode(opt) === 'allow' && extra.gable && geo.isGable(wall));
+    for (const off of spiral(wall === prefWall ? prefOffset : 0, L / 2, 0.25)) {
+      const cand = { wall, offset: off, uid: '__cand', option_id: opt.id, ...(extra.w ? { w: extra.w } : {}), ...(extra.h ? { h: extra.h } : {}), ...(g ? { gable: true } : {}) };
       const p = resolvePlacement(geo, opt, cand);
-      if (Math.abs(p.offset - off) > 0.01) continue;
-      if (!collides(geo, optById, items, opt, cand, ignoreUid)) return { wall, offset: off };
+      if (Math.abs(p.offset - off) > 0.01 || !p.fits) continue;
+      if (!collides(geo, optById, items, opt, cand, ignoreUid)) return { wall, offset: off, ...(g ? { gable: true } : { gable: undefined }) };
     }
   }
   return null;
 }
 
 export function canPlace(geo, optById, items, opt, cand, ignoreUid) {
+  if ((opt.kind === 'vent' || gableMode(opt) === 'only') && WALLS.includes(cand.wall) && !geo.isGable(cand.wall)) return false;
   const p = resolvePlacement(geo, opt, cand);
-  return Math.abs(p.offset - cand.offset) < 0.01 && !collides(geo, optById, items, opt, cand, ignoreUid);
+  return p.fits !== false && Math.abs(p.offset - cand.offset) < 0.01 && !collides(geo, optById, items, opt, cand, ignoreUid);
 }
 
 function* spiral(start, lim, step) {

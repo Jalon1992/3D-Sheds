@@ -9,6 +9,7 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => money(n);
+const ftIn = v => { const t = Math.round(Number(v || 0) * 12 * 4) / 4, f = Math.floor(t / 12), i = +(t - f * 12).toFixed(2); return `${f}' ${i}"`; };
 const fmtDate = s => s ? new Date(s.replace(' ', 'T') + 'Z').toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 const CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>';
 const PENCIL = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>';
@@ -368,6 +369,20 @@ function styleEditor(style) {
   if (!sizes.length) sizes = [{ width: 8, depth: 10, price: 3500, active: 1 }, { width: 10, depth: 12, price: 5200, active: 1 }];
   let stds = (s.standard_options || []).map(x => ({ ...x }));
   let previewIdx = Math.min(sizes.length - 1, 1);
+  let avail = Array.isArray(s.available_options) ? s.available_options.map(Number) : null; // null = all options
+  const availHTML = () => {
+    const stdIds = new Set(stds.map(x => Number(x.option_id)));
+    const cats = CATEGORIES.filter(([k]) => catalog.options.some(o => o.category === k));
+    return `<div class="row" style="gap:16px;margin-bottom:8px">
+        <label class="chk"><input type="radio" name="av_mode" value="all" ${avail ? '' : 'checked'}>Every option</label>
+        <label class="chk"><input type="radio" name="av_mode" value="pick" ${avail ? 'checked' : ''}>Only the options ticked below</label>
+        ${avail ? '<button type="button" class="btn link sm" id="avAll">Tick all</button><button type="button" class="btn link sm" id="avNone">Untick all</button>' : ''}</div>
+      <div class="avgrid ${avail ? '' : 'off'}">${cats.map(([k, l]) => `<div><b>${esc(l)}</b>${catalog.options.filter(o => o.category === k).map(o => {
+        const std = stdIds.has(o.id), on = !avail || std || avail.includes(o.id);
+        return `<label class="chk"><input type="checkbox" data-av="${o.id}" ${on ? 'checked' : ''} ${!avail || std ? 'disabled' : ''}>${esc(o.name)}${std ? ' <span class="muted">(standard)</span>' : ''}${o.active ? '' : ' <span class="muted">(hidden)</span>'}</label>`;
+      }).join('')}</div>`).join('')}</div>
+      <div class="muted" style="font-size:12px;margin-top:6px">Customers only see the ticked options for this style. Standard options are always included.</div>`;
+  };
   const optSel = (v, i) => `<select data-std="${i}" data-k="option_id">${catalog.options.filter(o => o.placement !== 'none').map(o => `<option value="${o.id}" ${o.id === v ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>`;
   const colorSel = cat => `<label class="fld"><span>Default ${cat} color</span><select name="dc_${cat}"><option value="">First in list</option>${catalog.colors.filter(c => c.category === cat).map(c => `<option value="${c.id}" ${c.id === s.default_colors?.[cat] ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>`;
   const sizesHTML = () => `<table class="mini"><tr><th>Width (ft)</th><th>Depth (ft)</th><th>Base price</th><th>Active</th><th></th><th></th></tr>
@@ -377,20 +392,23 @@ function styleEditor(style) {
     <div class="row" style="margin-top:8px"><button type="button" class="btn ghost sm" id="addSize">+ Add size</button>
     <span class="muted" style="margin-left:auto">Fill prices:</span><input class="in" id="ppsf" type="number" placeholder="$/sq ft" style="width:90px"><input class="in" id="pbase" type="number" placeholder="+ base $" style="width:90px"><button type="button" class="btn ghost sm" id="fillP">Apply</button></div>`;
   const optOf = id => catalog.options.find(o => o.id === Number(id)) || {};
-  const stdHTML = () => `<table class="mini"><tr><th>Option</th><th>Wall</th><th>Offset (ft)</th><th>Width (ft)</th><th>Height (ft)</th><th></th></tr>
+  const gm = id => optOf(id).gable_mode || '';
+  const stdHTML = () => `<table class="mini"><tr><th>Option</th><th>Wall</th><th>Offset (ft)</th><th>Width (ft)</th><th>Height (ft)</th><th title="Windows set up to go in the gable">In gable</th><th></th></tr>
     ${stds.map((x, i) => `<tr><td>${optSel(x.option_id, i)}</td><td><select data-std="${i}" data-k="wall">${WALLS.map(w => `<option ${w === x.wall ? 'selected' : ''}>${w}</option>`).join('')}</select></td>
     <td><input type="number" step="0.25" data-std="${i}" data-k="offset" value="${x.offset || 0}"></td>
     <td><input type="number" step="0.05" data-std="${i}" data-k="w" value="${x.w ?? ''}" placeholder="${optOf(x.option_id).width ?? ''}"></td>
     <td><input type="number" step="0.05" data-std="${i}" data-k="h" value="${x.h ?? ''}" placeholder="${optOf(x.option_id).height ?? ''}"></td>
+    <td style="text-align:center">${gm(x.option_id) === 'allow' ? `<input type="checkbox" data-std="${i}" data-k="gable" ${x.gable ? 'checked' : ''}>` : gm(x.option_id) === 'only' ? '<span class="muted">always</span>' : '<span class="muted">—</span>'}</td>
     <td><button type="button" class="icon-btn" data-rmstd="${i}">${TRASH}</button></td></tr>`).join('')}</table>
     <button type="button" class="btn ghost sm" id="addStd" style="margin-top:8px">+ Add standard option</button>
-    <div class="muted" style="font-size:12px;margin-top:6px">Offset is measured from the centre of the wall, looking at it from outside (+ = right). Width/height let you size a door or window just for this style (leave blank to use the option's own size — e.g. make the 36" door 6'-8" tall here, 7'-0" on the garage). Standard options are included in the base price; customers pay only the difference to upgrade.</div>`;
+    <div class="muted" style="font-size:12px;margin-top:6px">Items can't overlap — their trim included. If one doesn't fit where you put it, the builder slides it to the nearest free spot. Offset is measured from the centre of the wall, looking at it from outside (+ = right). Width/height let you size a door or window just for this style (leave blank to use the option's own size — e.g. make the 36" door 6'-8" tall here, 7'-0" on the garage). Standard options are included in the base price; customers pay only the difference to upgrade.</div>`;
 
   openModal({
     title: isNew ? 'New style' : `Edit ${s.name}`,
     body: `<div class="split"><div><form class="form" id="sf">${STYLE_FIELDS().map(f => field(f, s[f.key])).join('')}
       <div class="section-t">Sizes &amp; prices</div><div class="full" id="sizesBox">${sizesHTML()}</div>
       <div class="section-t">Standard options (already on the shed)</div><div class="full" id="stdBox">${stdHTML()}</div>
+      <div class="section-t">Options offered on this style</div><div class="full" id="availBox">${availHTML()}</div>
       <div class="section-t">Default colors</div>${['siding', 'trim', 'roof', 'door', 'window'].map(colorSel).join('')}
       </form></div><div><div class="preview3d" id="pv"><div class="pv-note">Live preview</div></div></div></div>`,
     foot: `<span></span><div class="row"><button class="btn ghost" data-cancel>Cancel</button><button class="btn primary" id="saveStyle">Save style</button></div>`,
@@ -399,7 +417,9 @@ function styleEditor(style) {
       const collect = () => {
         const d = readFields($('#sf', root), STYLE_FIELDS());
         d.standard_options = stds.map(x => ({ option_id: Number(x.option_id), wall: x.wall, offset: Number(x.offset) || 0,
-          ...(Number(x.w) > 0 ? { w: Number(x.w) } : {}), ...(Number(x.h) > 0 ? { h: Number(x.h) } : {}) }));
+          ...(Number(x.w) > 0 ? { w: Number(x.w) } : {}), ...(Number(x.h) > 0 ? { h: Number(x.h) } : {}),
+          ...(x.gable && gm(x.option_id) === 'allow' ? { gable: true } : {}) }));
+        d.available_options = avail ? [...new Set(avail)] : null;
         d.default_colors = {}; for (const c of ['siding', 'trim', 'roof', 'door', 'window']) { const v = $(`[name=dc_${c}]`, root).value; if (v) d.default_colors[c] = Number(v); }
         return d;
       };
@@ -424,13 +444,16 @@ function styleEditor(style) {
       let t; const later = () => { clearTimeout(t); t = setTimeout(preview, 200); };
       wireInputs(root, later);
       const redrawSizes = () => { $('#sizesBox', root).innerHTML = sizesHTML(); later(); };
-      const redrawStd = () => { $('#stdBox', root).innerHTML = stdHTML(); later(); };
+      const redrawAvail = () => { $('#availBox', root).innerHTML = availHTML(); };
+      const redrawStd = () => { $('#stdBox', root).innerHTML = stdHTML(); redrawAvail(); later(); };
       root.addEventListener('input', e => {
         const d = e.target.dataset;
         if (d.sz !== undefined) { sizes[d.sz][d.k] = d.k === 'active' ? (e.target.checked ? 1 : 0) : e.target.value; later(); }
-        if (d.std !== undefined) { stds[d.std][d.k] = e.target.value; later(); }
+        if (d.std !== undefined) { stds[d.std][d.k] = d.k === 'gable' ? e.target.checked : e.target.value; later(); }
+        if (e.target.name === 'av_mode') { avail = e.target.value === 'pick' ? catalog.options.map(o => o.id) : null; redrawAvail(); }
+        if (d.av !== undefined) { const id = Number(d.av); avail = (avail || []).filter(x => x !== id); if (e.target.checked) avail.push(id); }
       });
-      root.addEventListener('change', e => { const d = e.target.dataset; if (d.std !== undefined) { stds[d.std][d.k] = e.target.value; if (d.k === 'option_id') redrawStd(); else later(); } if (d.sz !== undefined && d.k === 'active') sizes[d.sz].active = e.target.checked ? 1 : 0; });
+      root.addEventListener('change', e => { const d = e.target.dataset; if (d.std !== undefined) { stds[d.std][d.k] = d.k === 'gable' ? e.target.checked : e.target.value; if (d.k === 'option_id') redrawStd(); else later(); } if (d.sz !== undefined && d.k === 'active') sizes[d.sz].active = e.target.checked ? 1 : 0; });
       root.addEventListener('click', e => {
         const b = e.target.closest('button'); if (!b) return;
         if (b.id === 'addSize') { const l = sizes.at(-1) || { width: 8, depth: 8, price: 0 }; sizes.push({ width: l.width, depth: Number(l.depth) + 2, price: l.price, active: 1 }); redrawSizes(); }
@@ -439,6 +462,8 @@ function styleEditor(style) {
         if (b.id === 'fillP') { const p = Number($('#ppsf', root).value), base = Number($('#pbase', root).value) || 0; if (!p) return toast('Enter a $/sq ft'); sizes.forEach(z => (z.price = Math.round((z.width * z.depth * p + base) / 5) * 5)); redrawSizes(); }
         if (b.id === 'addStd') { stds.push({ option_id: catalog.options.find(o => o.placement === 'opening')?.id, wall: 'front', offset: 0 }); redrawStd(); }
         if (b.dataset.rmstd !== undefined) { stds.splice(Number(b.dataset.rmstd), 1); redrawStd(); }
+        if (b.id === 'avAll') { avail = catalog.options.map(o => o.id); redrawAvail(); }
+        if (b.id === 'avNone') { avail = []; redrawAvail(); }
         if (b.dataset.cancel !== undefined) closeModal();
       });
       $('#saveStyle', root).onclick = guard(async () => {
@@ -532,7 +557,9 @@ const OPTION_FIELDS = () => [
   { key: 'width', label: 'Width (ft)', type: 'number', step: '0.05' },
   { key: 'height', label: 'Height (ft)', type: 'number', step: '0.05' },
   { key: 'depth', label: 'Depth (ft)', type: 'number', step: '0.05' },
-  { key: 'elevation', label: 'Height off floor (ft)', type: 'number', step: '0.05', help: 'Doors = 0. Use -1 to auto-place high in the gable.' },
+  { key: 'elevation', label: 'Standard height — bottom above floor (ft)', type: 'number', step: '0.0208', help: 'Where it sits by default. Doors = 0. Windows: bottom of the window (top shown below). Use -1 to auto-place high in the gable (vents).' },
+  { type: 'html', html: '<div class="full roofinfo" id="elevInfo"></div>' },
+  { key: 'gable_mode', label: 'Can it go up in the gable?', type: 'select', full: true, options: [['', 'No — walls only'], ['allow', 'Yes — customer can put it on the wall or up in the gable'], ['only', 'Gable only (e.g. a gable/attic window)']], help: 'Windows & vents. In the gable it is centred between the top of the wall and the roof line, if it fits.' },
   { key: 'price', label: 'Price ($)', type: 'number', step: '0.01' },
   { key: 'price_unit', label: 'Priced', type: 'select', options: PRICE_UNITS },
   { key: 'max_qty', label: 'Max per shed', type: 'number' },
@@ -554,6 +581,31 @@ async function options() {
       <td class="muted">${o.placement === 'none' ? '—' : `${o.width ?? ''} × ${o.height ?? ''}`}</td><td class="num">${fmt(o.price)}${unit(o)}</td>
       <td><span class="pill ${o.active ? 'on' : 'off'}">${o.active ? 'Active' : 'Hidden'}</span></td>
       <td class="num" style="white-space:nowrap"><button class="icon-btn" data-edit="${o.id}">${PENCIL}</button> <button class="icon-btn" data-dup="${o.id}" title="Duplicate">${COPY}</button> <button class="icon-btn" data-del="${o.id}">${TRASH}</button></td></tr>`).join('')}</table></div>`;
+  const wins = catalog.options.filter(o => o.placement === 'opening' && (o.category === 'windows' || String(o.kind || '').startsWith('window')));
+  if ((!cat || cat === 'windows') && wins.length) {
+    const inch = v => +(Number(v || 0) * 12).toFixed(2);
+    $('#main').insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:16px"><div class="card-pad" style="padding-bottom:4px"><h2>Standard window heights</h2>
+      <p class="muted" style="margin:0">Set where each window type sits by default, in inches above the floor — enter the bottom or the top, the other follows. Customers can still move windows sideways; the height stays at this standard.</p></div>
+      <table class="tbl" id="winH"><tr><th>Window</th><th>Size</th><th>Bottom (in)</th><th>Top (in)</th><th>In the gable</th></tr>
+      ${wins.map(o => `<tr data-wid="${o.id}" data-h="${o.height}"><td><b>${esc(o.name)}</b></td><td class="muted">${ftIn(o.width)} × ${ftIn(o.height)}</td>
+        ${o.gable_mode === 'only' ? `<td colspan="2" class="muted">Auto — centred in the gable<input type="hidden" data-wb value="${inch(o.elevation)}"></td>` : `<td><input class="in" type="number" step="0.25" data-wb value="${inch(o.elevation)}" style="width:90px"></td>
+        <td><input class="in" type="number" step="0.25" data-wt value="${inch(Number(o.elevation) + Number(o.height))}" style="width:90px"></td>`}
+        <td><select class="in" data-wg>${[['', 'No'], ['allow', 'Customer can choose'], ['only', 'Gable only']].map(([k, l]) => `<option value="${k}" ${(o.gable_mode || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td></tr>`).join('')}</table>
+      <div class="card-pad" style="padding-top:10px"><button class="btn primary sm" id="saveWinH">Save window heights</button></div></div>`);
+    $('#winH').addEventListener('input', e => {
+      const tr = e.target.closest('tr'); const h = Number(tr.dataset.h) * 12;
+      if (e.target.matches('[data-wb]') && $('[data-wt]', tr)) $('[data-wt]', tr).value = +(Number(e.target.value) + h).toFixed(2);
+      if (e.target.matches('[data-wt]')) $('[data-wb]', tr).value = +(Number(e.target.value) - h).toFixed(2);
+    });
+    $('#saveWinH').onclick = guard(async () => {
+      for (const tr of $$('#winH tr[data-wid]')) {
+        const o = catalog.options.find(x => x.id === Number(tr.dataset.wid));
+        const elevation = +(Number($('[data-wb]', tr).value) / 12).toFixed(4), gable_mode = $('[data-wg]', tr).value;
+        if (Math.abs(elevation - Number(o.elevation)) > 1e-4 || gable_mode !== (o.gable_mode || '')) await api('PATCH', `/api/v1/options/${o.id}`, { elevation, gable_mode });
+      }
+      toast('Window heights saved'); options();
+    });
+  }
   $('#addOpt').onclick = () => optionEditor(null);
   $('#main').onclick = guard(async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -576,7 +628,14 @@ function optionEditor(row) {
     foot: `<span></span><div class="row"><button class="btn ghost" data-cancel>Cancel</button><button class="btn primary" id="osave">Save option</button></div>`,
     onMount: root => {
       modalScene = new ShedScene($('#pv', root));
-      const preview = () => { try { modalScene.previewOption(readFields($('#of', root), fields)); } catch (e) { console.warn(e); } };
+      const preview = () => {
+        try {
+          const d = readFields($('#of', root), fields); modalScene.previewOption(d);
+          const el = $('#elevInfo', root);
+          if (el) el.innerHTML = d.placement === 'opening' && Number(d.elevation) >= 0
+            ? `Bottom <b>${ftIn(d.elevation)}</b> above the floor · top <b>${ftIn(Number(d.elevation) + Number(d.height || 0))}</b>${String(d.kind || '').startsWith('door') ? '' : ` · head trim top <b>${ftIn(Number(d.elevation) + Number(d.height || 0) + 4 / 12)}</b> (4" trim)`}` : '';
+        } catch (e) { console.warn(e); }
+      };
       let t; wireInputs(root, () => { clearTimeout(t); t = setTimeout(preview, 200); });
       $('[data-cancel]', root).onclick = closeModal;
       $('#osave', root).onclick = guard(async () => {
