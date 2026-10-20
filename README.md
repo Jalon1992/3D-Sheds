@@ -2,7 +2,7 @@
 
 A self-hosted 3D shed configurator with an admin back office, an Open REST API, signed webhooks and a native GoHighLevel integration.
 
-- **Customers:** pick a Style → Size → Roof & Colors (Architectural Shingles or Ag Panel Metal) → Options → submit a Quote. Standard options are already on the shed. Customers **drag and drop** doors, windows and every other option to a new spot on the 3D model (along a wall, around a corner to another wall, across the ceiling), and click any of them to upgrade, swap or remove it. After submitting they can download their **3D model (.glb)** and a **to-scale floor plan** (SVG / print to PDF).
+- **Customers:** pick a Style & Size (one screen) → Roof & Colors (Architectural Shingles or Ag Panel Metal) → Options → submit a Quote. Standard options are already on the shed. Customers **drag and drop** doors, windows and every other option to a new spot on the 3D model (along a wall, around a corner to another wall, across the ceiling), and click any of them to upgrade, swap or remove it. After submitting they can download their **3D model (.glb)** and a **to-scale floor plan** (SVG / print to PDF).
 - **You (admin):** log in at `/admin` to manage styles, sizes & prices, colors, options (each with a built-in 3D model or your own uploaded `.glb`), quotes, GHL, webhooks, API keys and branding — with a live 3D preview while you edit.
 - **Integrations:** every quote can go to GoHighLevel (contact + opportunity + note, or a workflow Inbound Webhook), to any number of webhooks (Zapier, Make, n8n, your server), and everything is available through a documented REST API (`/docs`).
 
@@ -79,7 +79,9 @@ Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side
 - **Options offered on this style:** untick anything the style shouldn't offer (e.g. no lofts on the garage). Customers only see the ticked options, switching styles drops items the new style doesn't offer, and the server enforces it on every quote. The style's standard options are always included.
 - **Default colors** per style.
 
-**Roof trim rules:** shingle roofs get no metal trim at all: shingle ridge caps, shingles lapping over the gambrel break, and a trim-color rake board (no metal rake edge or drip edge). Metal roofs keep the metal ridge cap, transition trim and rake trim.
+**Phones, tablets & computers:** the builder adapts to the screen. On computers the 3D view sits beside the panel. On phones and tablets held upright, the 3D view stays pinned at the top while the customer scrolls the options. On phones held sideways, the 3D view and the panel sit side by side. Touch screens get bigger buttons, plus tap to select, press-and-drag to move and pinch to zoom. Form fields stay at 16px so iPhones don't zoom in. The admin works on phones and tablets too: the menu scrolls across the top, wide tables scroll sideways, and editors open full-screen.
+
+**Roof trim rules:** shingle roofs get no metal trim at all: shingle ridge caps, shingles lapping over the gambrel break, and a trim-color rake board (no metal rake edge or drip edge). Metal roofs keep the metal ridge cap, transition trim and rake trim. The ridge cap goes on last: it sits on top of the rake trim and runs out over its ends.
 
 **Fly rafter (rake) tail cut — per style:** *Flat* cuts the rake tails level with the bottom of the fascia, so no point hangs below it (best on the steep hips of a Lofted Barn). *Plumb* is a vertical cut in line with the fascia face. Leave it on *Default* for flat on barns and plumb on everything else. The elevation drawings follow the same setting.
 

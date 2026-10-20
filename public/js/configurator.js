@@ -10,9 +10,11 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const params = new URLSearchParams(location.search);
 
 const STEPS = [
-  { key: 'style', label: 'Style' }, { key: 'size', label: 'Size' }, { key: 'colors', label: 'Roof & Colors' },
+  { key: 'style', label: 'Style & Size' }, { key: 'colors', label: 'Roof & Colors' },
   { key: 'options', label: 'Options' }, { key: 'quote', label: 'Quote' },
 ];
+const stepOf = key => STEPS.findIndex(s => s.key === key);
+const QUOTE = stepOf('quote');
 const CATS = [
   ['doors', 'Doors'], ['windows', 'Windows'], ['interior', 'Shelves & Loft'], ['electrical', 'Electrical'],
   ['exterior', 'Exterior'], ['upgrades', 'Upgrades'],
@@ -365,32 +367,31 @@ $('#itemcard').addEventListener('click', e => {
 // Panel steps
 // ---------------------------------------------------------------------------
 function renderSteps() {
-  $('#steps').innerHTML = STEPS.map((s, i) => `<button data-step="${i}" class="${i === state.step ? 'on' : ''} ${i < state.maxStep || (state.submitted && i < 4) ? 'done' : ''}" ${i > state.maxStep ? 'disabled' : ''}><span class="n">${i + 1}</span><span class="lbl">${s.label}</span></button>`).join('');
+  $('#steps').innerHTML = STEPS.map((s, i) => `<button data-step="${i}" class="${i === state.step ? 'on' : ''} ${i < state.maxStep || (state.submitted && i < QUOTE) ? 'done' : ''}" ${i > state.maxStep ? 'disabled' : ''}><span class="n">${i + 1}</span><span class="lbl">${s.label}</span></button>`).join('');
 }
 $('#steps').addEventListener('click', e => { const b = e.target.closest('button[data-step]'); if (b && !b.disabled) go(Number(b.dataset.step)); });
 
 function go(i) {
-  if (i === 4) selectItem(null);
+  if (i === QUOTE) selectItem(null);
   state.step = Math.max(0, Math.min(STEPS.length - 1, i));
   state.maxStep = Math.max(state.maxStep, state.step);
   renderSteps(); renderPanel();
   $('#panel').scrollTop = 0;
   if (window.innerWidth <= 900) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-$('#next').onclick = () => { if (state.step === 4) return submitQuote(); go(state.step + 1); };
+$('#next').onclick = () => { if (state.step === QUOTE) return submitQuote(); go(state.step + 1); };
 $('#back').onclick = () => go(state.step - 1);
 
 function renderPanel() {
   const key = STEPS[state.step].key;
   const el = $('#panel');
   $('#back').style.visibility = state.step === 0 ? 'hidden' : 'visible';
-  $('#next').textContent = state.step === 4 ? 'Get my quote' : `Next: ${STEPS[state.step + 1]?.label}`;
-  $('#next').hidden = !!(state.step === 4 && state.submitted);
+  $('#next').innerHTML = state.step === QUOTE ? 'Get my quote' : `Next<span class="next-long">: ${esc(STEPS[state.step + 1]?.label || '')}</span>`;
+  $('#next').hidden = !!(state.step === QUOTE && state.submitted);
   const keep = {}; const f0 = el.querySelector('#qform');
   if (f0) for (const i of f0.elements) if (i.name) keep[i.name] = i.type === 'checkbox' ? i.checked : i.value;
   const loc = state.submitted ? '' : renderLoc();
-  if (key === 'style') el.innerHTML = loc + renderStyle();
-  if (key === 'size') el.innerHTML = loc + renderSize();
+  if (key === 'style') el.innerHTML = loc + renderStyle() + renderSize();
   if (key === 'colors') el.innerHTML = loc + renderColors();
   if (key === 'options') el.innerHTML = loc + renderOptions();
   if (key === 'quote') el.innerHTML = state.submitted ? renderDone() : loc + renderQuote();
@@ -404,8 +405,8 @@ function renderPanel() {
 
 function renderStyle() {
   const cur = curStyle();
-  return `<h2>${esc(S().headline || 'Choose a style')}</h2><p class="sub">Pick a style to start. You can change anything later.</p>
-  <div class="cards">${state.catalog.styles.map(s => {
+  return `<h2>${esc(S().headline || 'Choose a style & size')}</h2><p class="sub">Pick a style and a size to start. You can change anything later.</p>
+  <h3>Style</h3><div class="cards">${state.catalog.styles.map(s => {
     const from = Math.min(...s.sizes.map(z => z.price));
     return `<button class="card ${s.id === cur.id ? 'on' : ''}" data-style="${s.id}">
       <div class="thumb">${s.image_url ? `<img src="${esc(s.image_url)}" alt="">` : (ROOF_ICON[s.roof_type] || ROOF_ICON.gable)}</div>
@@ -415,7 +416,7 @@ function renderStyle() {
 }
 function renderSize() {
   const st = curStyle();
-  return `<h2>Choose a size</h2><p class="sub">${esc(st.name)} sizes, width × depth. The front wall is the width.</p>
+  return `<h3 id="sizeHead">${esc(st.name)} sizes</h3><p class="sub" style="margin-top:-4px">Width × depth — the front wall is the width.</p>
   <div class="sizes">${st.sizes.map(z => `<button class="size ${z.id === state.config.size_id ? 'on' : ''}" data-size="${z.id}">
     <b>${z.width}' × ${z.depth}'</b><small>${z.width * z.depth} sq ft</small>${showPrices() ? `<span>${fmt(z.price)}</span>` : ''}</button>`).join('')}</div>`;
 }
@@ -529,13 +530,14 @@ $('#panel').addEventListener('click', e => {
     const keepLoc = { dealer_id: state.config.dealer_id, zip: state.config.zip };
     state.config = defaultConfig(state.catalog, id, near.id);
     for (const [k, v] of Object.entries(keepLoc)) if (v) state.config[k] = v;
-    if (state.maxStep >= 2) {
+    if (state.maxStep >= stepOf('colors')) {
       state.config.colors = { ...keepColors };
       if (roofChoices(state.catalog, st).some(r => r.key === keepRoof)) state.config.roof_material = keepRoof;
       setRoofMaterial(state.config.roof_material);
     }
     fitItems(false);
     selectItem(null); rebuild(); renderPanel();
+    $('#sizeHead')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } else if (d.size) {
     state.config.size_id = Number(d.size);
     fitItems(true);
@@ -652,6 +654,7 @@ $('#views').onclick = e => {
 // ---------------------------------------------------------------------------
 async function boot() {
   if (params.get('embed') === '1') document.body.classList.add('embed');
+  if (matchMedia('(pointer: coarse)').matches) $('#hint').textContent = 'Tip: tap a door or window to change it · press and drag to move it · pinch to zoom';
   const r = await fetch('/api/v1/catalog'); state.base = await r.json(); state.catalog = state.base;
   const cat = state.base;
   if (!cat.styles.length) { $('#panel').innerHTML = '<h2>Coming soon</h2><p class="sub">No shed styles have been published yet. Add some in the admin.</p>'; $('#loading').classList.add('gone'); return; }
@@ -683,7 +686,7 @@ async function boot() {
       if (q.config) {
         state.config = q.config;
         if (!state.config.roof_material) state.config.roof_material = cat.styles.find(s => s.id === q.config.style_id)?.roof_material || 'shingle';
-        state.maxStep = 3; state.step = 3;
+        state.maxStep = stepOf('options'); state.step = stepOf('options');
         const qs = cat.styles.find(s => s.id === q.config.style_id);
         if (!qs) throw new Error('style gone');
         // the size may have been removed since the quote was made: use the closest one
@@ -702,7 +705,7 @@ async function boot() {
     const zid = Number(params.get('size'));
     state.config = defaultConfig(cat, style.id, style.sizes.find(z => z.id === zid)?.id);
     fitItems(false);
-    if (params.get('style')) { state.step = 1; state.maxStep = 1; }
+    if (params.get('style')) state.jumpToSize = true;
   }
   if (savedLoc.dealer_id && !state.config.dealer_id && findDealer(cat, savedLoc.dealer_id)) state.config.dealer_id = findDealer(cat, savedLoc.dealer_id).id;
   if (savedLoc.zip && !state.config.zip && /^\d{5}$/.test(savedLoc.zip)) state.config.zip = savedLoc.zip;
@@ -710,6 +713,7 @@ async function boot() {
   rebuild();
   if (params.has('debug')) window.__shed = { scene, state, optById, addOption, removeItem, swapItem, moveItem, moveToWall, setGable, dragItem, fitItems, pricing, notice, go };
   renderSteps(); renderPanel();
+  if (state.jumpToSize) setTimeout(() => $('#sizeHead')?.scrollIntoView({ block: 'start' }), 50);
   setTimeout(() => $('#loading').classList.add('gone'), 150);
   setTimeout(() => $('#hint').classList.add('gone'), 9000);
   if (dlWant === 'glb') setTimeout(downloadGLB, 1200);

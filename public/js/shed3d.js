@@ -866,12 +866,17 @@ export class ShedScene {
         continue; // gambrel break on shingles: courses lap over the bend, no trim
       }
       if (i === peakIdx) {
-        // Ridge cap: bent over the peak, one leaf down each slope, wedge fills the bend
-        leafOn(P, top[i - 1], i - 1, capW); leafOn(P, top[i + 1], i, capW);
-        const n1 = normal(i - 1), n2 = normal(i);
-        const wedge = new THREE.Shape([V2(P), V2([P[0] + n2[0] * ct, P[1] + n2[1] * ct]), V2([P[0] + n1[0] * ct, P[1] + n1[1] * ct])]);
-        const wm2 = new THREE.Mesh(new THREE.ExtrudeGeometry(wedge, { depth: ridgeLen - 0.01, bevelEnabled: false }), M.roofPlain);
-        wm2.position.z = -RL + 0.005; wm2.castShadow = true; wm2.userData.solid = true; roofG.add(wm2);
+        // Metal ridge cap: installed LAST — it sits on top of the rake trim and runs out over its ends.
+        // Lifted above the rake trim's top, with hems down to the panels (like the cap's closure).
+        const lift = ct + 0.045, ext = rt + 0.06;
+        const Q = offLine(th + lift)[i], T0 = offLine(th + lift + ct)[i];
+        const dir = j => { const t = top[j], l = Math.hypot(t[0] - P[0], t[1] - P[1]); return [(t[0] - P[0]) / l, (t[1] - P[1]) / l]; };
+        const u1 = dir(i - 1), u2 = dir(i + 1), n1 = normal(i - 1), n2 = normal(i);
+        const D1 = [P[0] + u1[0] * capW, P[1] + u1[1] * capW], D2 = [P[0] + u2[0] * capW, P[1] + u2[1] * capW];
+        const T1 = [Q[0] + u1[0] * capW + n1[0] * ct, Q[1] + u1[1] * capW + n1[1] * ct], T2 = [Q[0] + u2[0] * capW + n2[0] * ct, Q[1] + u2[1] * capW + n2[1] * ct];
+        const capShape = new THREE.Shape([V2(P), V2(D1), V2(T1), V2(T0), V2(T2), V2(D2)]);
+        const cap = new THREE.Mesh(new THREE.ExtrudeGeometry(capShape, { depth: ridgeLen + 2 * ext, bevelEnabled: false }), M.roofPlain);
+        cap.position.z = -RL - ext; cap.castShadow = true; cap.userData.solid = true; roofG.add(cap);
       } else {
         // Transition trim: lies on the LOWER slope; the upper roofing laps over it
         const lower = i < peakIdx ? i - 1 : i;
