@@ -40,4 +40,10 @@ writeFileSync('demo/dist/admin.html', admin);
 writeFileSync('demo/dist/shed-builder-demo.artifact.html', builder
   .replace(/<!doctype html>\s*/i, '').replace(/<html[^>]*>|<\/html>|<head>|<\/head>|<\/body>/gi, '').replace(/<body>/i, '')
   .replace(/<meta charset="utf-8">\s*/i, '').replace(/<meta name="viewport"[^>]*>\s*/i, ''));
+// Tester build: designer only, no admin link — safe to send to anyone
+const tester = inline(readFileSync('public/index.html', 'utf8').replace('<script type="module"', pdfTags + '\n<script type="module"'), 'public/css/app.css', await bundle('demo/tester-entry.js'),
+  bannerCss + `\nbody:has(.demo-banner) .layout{height:calc(100dvh - var(--top-h) - 31px)}`, 'Shed Designer');
+writeFileSync('demo/dist/shed-designer-test.artifact.html', tester
+  .replace(/<!doctype html>\s*/i, '').replace(/<html[^>]*>|<\/html>|<head>|<\/head>|<\/body>/gi, '').replace(/<body>/i, '')
+  .replace(/<meta charset="utf-8">\s*/i, '').replace(/<meta name="viewport"[^>]*>\s*/i, ''));
 console.log('demo/dist: shed-builder-demo.html', (builder.length / 1024).toFixed(0) + ' KB, admin.html', (admin.length / 1024).toFixed(0) + ' KB');
