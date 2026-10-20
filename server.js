@@ -55,6 +55,8 @@ function rateLimit(max, windowMs) {
 // =============================================================================
 app.get('/api/v1/catalog', (req, res) => res.json(getCatalog()));
 
+// Health check for Railway/Render/Docker: answers once the database is reachable
+app.get('/healthz', (req, res) => { try { get('SELECT 1 AS ok'); res.json({ ok: true }); } catch (e) { res.status(503).json({ ok: false }); } });
 app.post('/api/v1/price', (req, res) => {
   try {
     const cat = getCatalog();

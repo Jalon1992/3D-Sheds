@@ -6,7 +6,7 @@ services:
     plan: starter            # a persistent disk needs a paid instance
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /api/v1/catalog
+    healthCheckPath: /healthz
     disk:
       name: data
       mountPath: /var/data
