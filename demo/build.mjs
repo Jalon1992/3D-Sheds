@@ -17,7 +17,9 @@ if (seedFrom) {
 }
 
 const bundle = async entry => (await build({ entryPoints: [entry], bundle: true, minify: true, format: 'esm', write: false, loader: { '.json': 'json' } }))
-  .outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
+  .outputFiles[0].text.replace(/<\/script/gi, '<\\/script')
+  // drop GLTFLoader's tiny embedded AVIF/WebP support-test images (embedded image files block public sharing)
+  .replace(/data:image\/(avif|webp);base64,[A-Za-z0-9+/=]+/g, 'data:,');
 const bannerCss = `
 .demo-banner{background:#fff6e5;color:#7a3d06;font:13px/1.4 Inter,system-ui,sans-serif;text-align:center;padding:6px 12px;border-bottom:1px solid #f3dfb8}
 .demo-banner a{color:#7a3d06;font-weight:700}
