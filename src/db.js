@@ -109,10 +109,12 @@ for (const sql of [
   'ALTER TABLE styles ADD COLUMN rake_tail TEXT',
   'ALTER TABLE sizes ADD COLUMN hip_len REAL',
   'ALTER TABLE sizes ADD COLUMN upper_len REAL',
+  'ALTER TABLE options ADD COLUMN package_items TEXT',
+  'ALTER TABLE options ADD COLUMN package_only INTEGER DEFAULT 0',
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
 // ---- JSON column helpers -----------------------------------------------------
-export const JSON_COLS = new Set(['standard_options', 'default_colors', 'roof_choices', 'available_options', 'roofing', 'price_tiers', 'dealers', 'zip_tiers', 'events', 'headers', 'config', 'pricing', 'utm']);
+export const JSON_COLS = new Set(['standard_options', 'default_colors', 'roof_choices', 'available_options', 'package_items', 'roofing', 'price_tiers', 'dealers', 'zip_tiers', 'events', 'headers', 'config', 'pricing', 'utm']);
 
 export function parseRow(row) {
   if (!row) return row;

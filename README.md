@@ -81,7 +81,7 @@ Each style sets the **roof** (gable, barn/gambrel, lean-to, saltbox), which side
 
 **Phones, tablets & computers:** the builder adapts to the screen. On computers the 3D view sits beside the panel. On phones and tablets held upright, the 3D view stays pinned at the top while the customer scrolls the options. On phones held sideways, the 3D view and the panel sit side by side. Touch screens get bigger buttons, plus tap to select, press-and-drag to move and pinch to zoom. Form fields stay at 16px so iPhones don't zoom in. The admin works on phones and tablets too: the menu scrolls across the top, wide tables scroll sideways, and editors open full-screen.
 
-**Roof trim rules:** shingle roofs get no metal trim at all: shingle ridge caps, shingles lapping over the gambrel break, and a trim-color rake board (no metal rake edge or drip edge). Metal roofs keep the metal ridge cap, transition trim and rake trim. The ridge cap goes on last: it sits on top of the rake trim and runs out over its ends.
+**Roof trim rules:** shingle roofs get no metal trim at all: shingle ridge caps, shingles lapping over the gambrel break, and a trim-color rake board (no metal rake edge or drip edge). Metal roofs are modelled as real **Ag Panel** (3/4" trapezoid ribs every 9" with two stiffening ribs between, screw rows every 2 ft, painted-steel finish). They keep the metal ridge cap, transition trim and rake trim. The ridge cap goes on last: it sits on top of the rake trim and runs out over its ends.
 
 **Fly rafter (rake) tail cut — per style:** *Flat* cuts the rake tails level with the bottom of the fascia, so no point hangs below it (best on the steep hips of a Lofted Barn). *Plumb* is a vertical cut in line with the fascia face. Leave it on *Default* for flat on barns and plumb on everything else. The elevation drawings follow the same setting.
 
@@ -119,7 +119,15 @@ Every option has a category, price, size and a **placement**:
 
 **Swap group:** options with the same swap group (e.g. `door`, `window`) appear as upgrade choices when the customer clicks that item on the model.
 
-**3D models:** pick one of the built-in procedural models (single/glass/double/French/roll-up doors, windows, shutters, transoms, vents, flower box, lights, outlets, shelf, workbench, loft, ramp, cupola) — they automatically take the customer's door/trim colors — **or upload your own `.glb`**. Custom models are scaled to the width × height × depth you enter, so export with the front facing **+Z** and **Y up**, and match the dimensions to the real product. SketchUp, Blender and most CAD tools can export `.glb`.
+**3D models — uploading & updating:** Admin → **Options & 3D models**. Every option with a 3D model has **Upload .glb / Replace .glb** and **Download** buttons right in the list, plus a *3D model* section at the top of its editor. To change a model:
+1. Click **Download** to get the current model (the built-in one, or your last upload) as a `.glb` starting file.
+2. Edit it in Blender, SketchUp or similar. Front facing **+Z**, **Y** up, sitting on the ground.
+3. Click **Upload .glb** (or drag the file onto the upload box in the editor). It replaces the model everywhere right away, including in customers' 3D views, downloads and PDFs. Upload a new file any time to update it. *Use built-in instead* switches back.
+
+Models are stretched to the width × height × depth you enter, so match those to the real product. Built-in models (single/glass/double/French/roll-up doors, windows, shutters, transoms, vents, flower box, lights, outlets, switch, breaker box, shelf, workbench, loft, ramp, cupola) take the customer's door/trim colors automatically.
+
+**Packages (e.g. the Electrical Package):** any option can be a package. In its editor, under *What's in this package*, add items (breaker box, outlets, switches, lights, exterior lights…) with a **quantity**, the **wall** it goes on (front/back/left/right, ceiling, or auto), a **position** in feet from the wall centre (seen from outside, + = right; blank = we pick a free spot) and an optional **height**. When a customer adds the package, every item is placed on their shed at those spots, shown as *Included in the Electrical Package*, and priced in the package. If a spot is taken or the shed is too small, the item goes to the nearest free spot, and the customer is told if something doesn't fit at all. Customers can move package items but can't remove them on their own; removing the package removes them all. Tick *Only sold as part of a package* for parts like the breaker box so they aren't listed on their own. A package can also be a style's standard option. The floor plan shows electrical symbols (outlets, switches, ceiling lights, breaker panel) with a legend.
+
 
 ---
 

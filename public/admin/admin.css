@@ -214,3 +214,6 @@ pre.snip { background: #0f1715; color: #d3eadf; padding: 14px; border-radius: 10
   .g4, .g3 { grid-template-columns: minmax(0, 1fr); }
   .head h1 { font-size: 22px; }
 }
+.modelbox { background: #f6f8f7; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.steps-ol { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.55; }
+.upl.drop { outline: 2px dashed var(--brand); outline-offset: 3px; border-radius: 8px; }

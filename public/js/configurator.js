@@ -1,6 +1,6 @@
 // Customer-facing configurator: Style → Size → Colors → Options → Quote.
 import { ShedScene } from './shed3d.js';
-import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList, optionAvailable } from './shared/pricing.js';
+import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList, optionAvailable, isPackage, placePackage } from './shared/pricing.js';
 import { shedGeometry, findSpot, canPlace, resolvePlacement, gableMode } from './shared/geometry.js';
 import { floorPlanSVG } from './shared/floorplan.js';
 import { buildDrawingPackage } from './drawings.js';
@@ -120,6 +120,8 @@ $('#panel').addEventListener('input', e => {
 });
 
 const avail = o => optionAvailable(curStyle(), o) && o.active !== 0;
+const listable = o => avail(o) && !o.package_only;          // parts only sold inside a package aren't listed
+const pkgOf = it => it?.package_of && state.config.items.find(x => x.uid === it.package_of);
 function pricing() { try { return priceConfig(state.catalog, state.config); } catch { return null; } }
 function rebuild() {
   scene.build(state.catalog, state.config);
@@ -167,10 +169,19 @@ function preferredWall(o) {
 function addOption(o) {
   const items = state.config.items;
   if (o.placement === 'none') {
-    if (items.some(i => i.option_id === o.id)) return removeItem(items.find(i => i.option_id === o.id).uid);
-    items.push({ uid: newUid(), option_id: o.id, wall: null, offset: 0 }); rebuild(); renderPanel(); return;
+    const have = items.find(i => i.option_id === o.id && !i.package_of);
+    if (have) return removeItem(have.uid);
+    const pk = { uid: newUid(), option_id: o.id, wall: null, offset: 0 };
+    items.push(pk);
+    if (isPackage(o)) {
+      const { added, skipped } = placePackage(state.catalog, curStyle(), curSize(), items, pk);
+      items.push(...added);
+      if (added.some(a => optById[a.option_id].placement !== 'ceiling') && !state.interior) setInterior(true);
+      if (skipped.length) notice(`Not everything in the ${o.name} fits`, `There's no room on this ${sizeTxt()} shed for: ${skipped.join(', ')}.\n\nThe rest of the package has been added. Move or remove something, or pick a bigger size.`);
+    }
+    rebuild(); renderPanel(); return;
   }
-  const count = items.filter(i => i.option_id === o.id).length;
+  const count = items.filter(i => i.option_id === o.id && !i.package_of).length;
   if (count >= (o.max_qty || 10)) return toast(`Maximum of ${o.max_qty} for ${o.name}`);
   let spot = null;
   if (o.kind === 'flowerbox') {
@@ -195,13 +206,16 @@ function addOption(o) {
   if (spot.wall && WALLS.includes(spot.wall)) showWall(spot.wall);
 }
 function removeItem(uid) {
-  state.config.items = state.config.items.filter(i => i.uid !== uid);
+  const it = state.config.items.find(i => i.uid === uid);
+  const pk = pkgOf(it);
+  if (pk) return notice('Part of a package', `This is included in the ${optById[pk.option_id].name}. You can move it anywhere — to remove it, remove the whole package.`);
+  state.config.items = state.config.items.filter(i => i.uid !== uid && i.package_of !== uid);
   if (state.selected === uid) selectItem(null);
   rebuild(); renderPanel();
 }
 function swapItem(uid, newId) {
   const it = state.config.items.find(i => i.uid === uid); const o = optById[newId];
-  if (!it || !o) return;
+  if (!it || !o || it.package_of) return;
   const prev = it.option_id, prevW = it.w, prevH = it.h;
   const prevG = it.gable;
   it.option_id = newId; delete it.w; delete it.h;
@@ -257,15 +271,17 @@ function fitItems(announce) {
   for (const it of state.config.items) {
     const o = optById[it.option_id];
     if (!o) continue; // option no longer exists
+    if (it.package_of && !state.config.items.some(x => x.uid === it.package_of)) continue; // its package was removed
     if (it.gable && !(WALLS.includes(it.wall) && g.isGable(it.wall) && gableMode(o) === 'allow')) delete it.gable;
-    if (!avail(o) && !(it.standard_of && it.standard_of === it.option_id)) { dropped.push(o.name + ' (not offered on this style)'); continue; }
+    if (!it.package_of && !avail(o) && !(it.standard_of && it.standard_of === it.option_id)) { dropped.push(o.name + ' (not offered on this style)'); continue; }
     const wallOk = !(o.placement === 'loft' && !g.isGable(it.wall));
     if (!it.wall || !WALLS.includes(it.wall) || (wallOk && canPlace(g, optById, keep, o, it, it.uid))) { keep.push(it); continue; }
-    const spot = findSpot(g, optById, keep, o, it.wall, it.offset, it.uid, { w: it.w, h: it.h, gable: it.gable && g.isGable(it.wall) });
+    const spot = findSpot(g, optById, keep, o, it.wall, it.offset, it.uid, { w: it.w, h: it.h, elev: it.elev, gable: it.gable && g.isGable(it.wall) });
     if (spot) { const n = { ...it, ...spot }; if (!n.gable) delete n.gable; keep.push(n); if (spot.wall !== it.wall) moved.push(`${o.name} → ${spot.wall} wall`); }
     else dropped.push(o.name);
   }
-  state.config.items = keep;
+  const keepUids = new Set(keep.map(i => i.uid));
+  state.config.items = keep.filter(i => !i.package_of || keepUids.has(i.package_of));
   if (dropped.length) notice('Some items no longer fit', `There's no room for ${dropped.length === 1 ? 'this item' : 'these items'} on the ${sizeTxt()} ${curStyle().name}, so ${dropped.length === 1 ? 'it was' : 'they were'} removed:\n\n• ${dropped.join('\n• ')}${moved.length ? `\n\nMoved to fit: ${moved.join(', ')}` : ''}`);
   else if (announce && moved.length) toast('Moved to fit: ' + moved.join(', '), 5000);
 }
@@ -321,7 +337,8 @@ function selectItem(uid) {
   const it = uid && state.config.items.find(i => i.uid === uid);
   if (!it) { card.hidden = true; return; }
   const o = optById[it.option_id];
-  const alts = state.catalog.options.filter(x => (avail(x) || x.id === o.id) && (o.swap_group ? x.swap_group === o.swap_group : (x.category === o.category && x.placement === o.placement)));
+  const pk = pkgOf(it);
+  const alts = pk ? [o] : state.catalog.options.filter(x => (listable(x) || x.id === o.id) && (o.swap_group ? x.swap_group === o.swap_group : (x.category === o.category && x.placement === o.placement)));
   const isStd = it.standard_of && it.standard_of === it.option_id;
   const price = optDelta(o, it);
   const isLoft = o.placement === 'loft';
@@ -333,7 +350,7 @@ function selectItem(uid) {
     ? (() => { try { const c = { ...state.config, items: state.config.items.filter(i => i.uid !== uid) }; return priceConfig(state.catalog, c).subtotal - p0.subtotal; } catch { return 0; } })() : 0;
   card.innerHTML = `
     <div class="ic-head"><div><div class="ic-title">${esc(o.name)}</div>
-      <div class="ic-meta">${isStd ? 'Included standard' : (showPrices() ? (price < 0 ? fmt(price) + ' credit' : '+' + fmt(price)) : '')}${it.wall && WALLS.includes(it.wall) ? ' · ' + it.wall + ' wall' : ''}</div></div>
+      <div class="ic-meta">${pk ? `Included in the ${esc(optById[pk.option_id].name)}` : isStd ? 'Included standard' : (showPrices() ? (price < 0 ? fmt(price) + ' credit' : '+' + fmt(price)) : '')}${it.wall && WALLS.includes(it.wall) ? ' · ' + it.wall + ' wall' : ''}</div></div>
       <button class="x" data-act="close" aria-label="Close">&times;</button></div>
     ${alts.length > 1 ? `<div class="ic-label">${it.standard_of ? 'Upgrade or change' : 'Change to'}</div>
     <div class="swaps">${alts.map(a => {
@@ -348,7 +365,7 @@ function selectItem(uid) {
     </div>` : ''}
     ${gableMode(o) === 'allow' && geo().isGable(it.wall) ? `<div class="ic-label">Height</div><div class="walls"><button data-gable="0" class="${it.gable ? '' : 'on'}">On the wall</button><button data-gable="1" class="${it.gable ? 'on' : ''}">Up in the gable</button></div>` : ''}
     ${gableMode(o) === 'only' ? `<div class="ic-meta" style="margin-top:8px">Sits up in the gable end.</div>` : ''}
-    <div class="ic-foot"><button class="link-danger" data-act="remove">Remove${removedCredit && showPrices() ? ` (${fmt(removedCredit)})` : ''}</button>
+    <div class="ic-foot">${pk ? '<span class="ic-meta">Drag it or use the arrows to move it</span>' : `<button class="link-danger" data-act="remove">Remove${removedCredit && showPrices() ? ` (${fmt(removedCredit)})` : ''}</button>`}
       <button class="btn primary sm" data-act="close">Done</button></div>`;
   card.hidden = false;
 }
@@ -386,7 +403,7 @@ function renderPanel() {
   const key = STEPS[state.step].key;
   const el = $('#panel');
   $('#back').style.visibility = state.step === 0 ? 'hidden' : 'visible';
-  $('#next').innerHTML = state.step === QUOTE ? 'Get my quote' : `Next<span class="next-long">: ${esc(STEPS[state.step + 1]?.label || '')}</span>`;
+  $('#next').innerHTML = state.step === QUOTE ? 'Get my quote' : `<span>Next<span class="next-long">: ${esc(STEPS[state.step + 1]?.label || '')}</span></span>`;
   $('#next').hidden = !!(state.step === QUOTE && state.submitted);
   const keep = {}; const f0 = el.querySelector('#qform');
   if (f0) for (const i of f0.elements) if (i.name) keep[i.name] = i.type === 'checkbox' ? i.checked : i.value;
@@ -460,12 +477,12 @@ function setRoofMaterial(key) {
 function renderOptions() {
   const items = state.config.items;
   const onShed = items.filter(i => optById[i.option_id]?.placement !== 'none');
-  const counts = {}; for (const i of items) counts[i.option_id] = (counts[i.option_id] || 0) + 1;
+  const counts = {}; for (const i of items) if (!i.package_of) counts[i.option_id] = (counts[i.option_id] || 0) + 1;
   const size = curSize();
   let html = `<h2>Add options</h2><p class="sub">Standard items are already on your shed. Click anything on the 3D model to upgrade, move or remove it.</p>`;
-  if (onShed.length) html += `<h3>On your shed</h3><div class="onshed">${onShed.map(i => { const o = optById[i.option_id]; return `<button class="${i.standard_of ? 'std' : ''}" data-sel="${i.uid}">${esc(o.name)}${i.wall && WALLS.includes(i.wall) ? ` · ${i.wall}` : ''}</button>`; }).join('')}</div>`;
+  if (onShed.length) html += `<h3>On your shed</h3><div class="onshed">${onShed.map(i => { const o = optById[i.option_id]; return `<button class="${i.standard_of || i.package_of ? 'std' : ''}" data-sel="${i.uid}" ${i.package_of ? `title="Included in the ${esc(optById[pkgOf(i)?.option_id]?.name || 'package')}"` : ''}>${esc(o.name)}${i.wall && WALLS.includes(i.wall) ? ` · ${i.wall}` : ''}</button>`; }).join('')}</div>`;
   for (const [cat, label] of CATS) {
-    const list = state.catalog.options.filter(o => o.category === cat && avail(o));
+    const list = state.catalog.options.filter(o => o.category === cat && listable(o));
     if (!list.length) continue;
     const n = list.reduce((s, o) => s + (counts[o.id] || 0), 0);
     html += `<div class="acc ${state.openCats.has(cat) ? 'open' : ''}" data-cat="${cat}"><button data-acc="${cat}">${esc(label)}${n ? `<span class="cnt">${n}</span>` : ''}<svg class="chev" viewBox="0 0 24 24" ${n ? '' : 'style="margin-left:auto"'}><path d="M6 9l6 6 6-6"/></svg></button><div class="acc-body">`;
@@ -473,7 +490,8 @@ function renderOptions() {
       const c = counts[o.id] || 0;
       const pr = (() => { try { return priceConfig(state.catalog, { ...state.config, items: [{ uid: 'p', option_id: o.id, wall: 'back' }] }).lines.find(l => l.type === 'option')?.amount ?? 0; } catch { return o.price; } })();
       const unit = { per_sqft: ` (${fmt(o.price)}/sq ft)`, per_ft_wall: ` (${fmt(o.price)}/ft)`, per_ft_width: ` (${fmt(o.price)}/ft)` }[o.price_unit] || '';
-      html += `<div class="opt"><div class="ico">${iconFor(o)}</div><div class="meta"><b>${esc(o.name)}</b>${o.description ? `<small>${esc(o.description)}</small>` : ''}${showPrices() ? `<span class="p">${fmt(pr)}${unit}</span>` : ''}</div>`;
+      const incl = isPackage(o) ? o.package_items.map(pi => { const x = optById[pi.option_id]; return x ? `${Number(pi.qty) > 1 ? pi.qty + ' × ' : ''}${x.name}` : ''; }).filter(Boolean).join(' · ') : '';
+      html += `<div class="opt"><div class="ico">${iconFor(o)}</div><div class="meta"><b>${esc(o.name)}</b>${o.description ? `<small>${esc(o.description)}</small>` : ''}${incl ? `<small class="incl">Includes: ${esc(incl)}</small>` : ''}${showPrices() ? `<span class="p">${fmt(pr)}${unit}</span>` : ''}</div>`;
       if (o.placement === 'none') html += `<button class="tog ${c ? 'on' : ''}" data-toggle="${o.id}" aria-label="Toggle ${esc(o.name)}"></button>`;
       else html += `<div class="qty">${c ? `<button data-dec="${o.id}" aria-label="Remove one">−</button><span>${c}</span>` : ''}<button class="add" data-add="${o.id}" aria-label="Add ${esc(o.name)}">+</button></div>`;
       html += `</div>`;
@@ -551,7 +569,7 @@ $('#panel').addEventListener('click', e => {
   } else if (d.add) addOption(optById[d.add]);
   else if (d.toggle) addOption(optById[d.toggle]);
   else if (d.dec) {
-    const list = state.config.items.filter(i => i.option_id === Number(d.dec));
+    const list = state.config.items.filter(i => i.option_id === Number(d.dec) && !i.package_of);
     const nonStd = list.filter(i => !i.standard_of); removeItem((nonStd.at(-1) || list.at(-1)).uid);
   } else if (d.sel) { selectItem(d.sel); const it = state.config.items.find(i => i.uid === d.sel); if (it && WALLS.includes(it.wall)) showWall(it.wall); }
   else if (d.zipgo !== undefined) setLocation({ zip: ($('#zipIn')?.value || '').trim() });

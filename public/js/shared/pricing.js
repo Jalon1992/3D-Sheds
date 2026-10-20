@@ -117,7 +117,7 @@ export function defaultConfig(catalog, styleId, sizeId) {
   const d = style.default_colors || {};
   // skip standard options whose option was deleted or hidden since the style was set up
   const live = new Set(catalog.options.filter(o => o.active !== 0).map(o => Number(o.id)));
-  const items = (style.standard_options || []).filter(s => live.has(Number(s.option_id))).map((s, i) => ({
+  const items0 = (style.standard_options || []).filter(s => live.has(Number(s.option_id))).map((s, i) => ({
     uid: 'std' + i,
     option_id: s.option_id,
     wall: s.wall || null,
@@ -127,6 +127,10 @@ export function defaultConfig(catalog, styleId, sizeId) {
     ...(s.gable ? { gable: true } : {}),
     standard_of: s.option_id,
   }));
+  const optById0 = Object.fromEntries(catalog.options.map(o => [o.id, o]));
+  const items = [...items0];
+  for (const it of items0) if (isPackage(optById0[it.option_id])) items.push(...placePackage(catalog, style, size, items, it).added);
+
   const choices = roofChoices(catalog, style);
   const roof_material = (choices.find(r => r.key === style.roof_material) || choices[0] || {}).key || 'shingle';
   const roofCols = roofColorsFor(catalog, roof_material);
@@ -191,7 +195,9 @@ export function priceConfig(catalog, config) {
     if (!o) continue;
     let amt = optionPrice(o, size, it.qty || 1, it.wall);
     let note = '';
-    if (it.standard_of) {
+    const pkgIt = it.package_of && (config.items || []).find(x => x.uid === it.package_of);
+    if (pkgIt && optById[pkgIt.option_id]) { amt = 0; note = `Included in ${optById[pkgIt.option_id].name}`; }
+    else if (it.standard_of) {
       if (it.standard_of === it.option_id) { amt = 0; note = 'Standard'; }
       else {
         const orig = optById[it.standard_of];
@@ -203,7 +209,7 @@ export function priceConfig(catalog, config) {
     }
     lines.push({
       type: 'option', label: o.name, amount: round2(amt), option_id: o.id, uid: it.uid,
-      category: o.category, wall: it.wall || null, note,
+      category: o.category, wall: it.wall || null, note, ...(it.package_of ? { package_of: it.package_of } : {}),
     });
   }
 
@@ -240,20 +246,58 @@ export function optionAvailable(style, opt) {
   return list.map(Number).includes(Number(opt.id));
 }
 
+// ---------------------------------------------------------------------------
+// Packages (e.g. Electrical Package): an option whose package_items list the parts it includes,
+// each with a quantity and where it goes: wall (front/back/left/right/ceiling or 'auto'),
+// offset in ft from the wall centre (seen from outside; blank = auto) and an optional height.
+// ---------------------------------------------------------------------------
+export function isPackage(o) { return Array.isArray(o?.package_items) && o.package_items.length > 0; }
+const finite = v => v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v));
+/** Place the parts of one package item. Returns { added, skipped } (skipped = part names with no room). */
+export function placePackage(catalog, style, size, items, pkgItem) {
+  const byId = Object.fromEntries(catalog.options.map(o => [o.id, o]));
+  const pkg = byId[pkgItem.option_id]; const added = [], skipped = [];
+  if (!isPackage(pkg)) return { added, skipped };
+  const geo = shedGeometry(style, size);
+  pkg.package_items.forEach((pi, ci) => {
+    const o = byId[Number(pi.option_id)]; if (!o || isPackage(o)) return;
+    const qty = Math.max(1, Math.min(20, Number(pi.qty) || 1));
+    for (let q = 0; q < qty; q++) {
+      const it = { uid: `${pkgItem.uid}-p${ci}-${q}`, option_id: o.id, package_of: pkgItem.uid, ...(finite(pi.elev) ? { elev: Number(pi.elev) } : {}) };
+      const all = [...items, ...added];
+      if (o.placement === 'none') { added.push({ ...it, wall: null, offset: 0 }); continue; }
+      if (o.placement === 'ceiling' || o.placement === 'roof') {
+        const lim = o.placement === 'ceiling' ? (geo.ridgeAlongZ ? geo.D : geo.W) / 2 - 1 : geo.L / 2 - 1.5;
+        // spread several lights evenly unless a position is given
+        const off = finite(pi.offset) ? Number(pi.offset) + q * 4 : -lim + 2 * lim * (q + 0.5) / qty;
+        added.push({ ...it, wall: o.placement, offset: +Math.max(-lim, Math.min(lim, off)).toFixed(2) }); continue;
+      }
+      const wantWall = WALLS.includes(pi.wall) ? pi.wall : (pi.wall === 'auto' || !pi.wall) && qty > 1 ? WALLS[(q + 1) % 4] : null;
+      const cand = { ...it, wall: wantWall || 'back', offset: finite(pi.offset) ? Number(pi.offset) : 0 };
+      if (WALLS.includes(cand.wall) && canPlace(geo, byId, all, o, cand, it.uid)) { added.push(cand); continue; }
+      const spot = findSpot(geo, byId, all, o, wantWall, cand.offset, it.uid, { elev: it.elev });
+      if (spot) { const n = { ...it, ...spot }; if (!n.gable) delete n.gable; added.push(n); } else skipped.push(o.name);
+    }
+  });
+  return { added, skipped };
+}
+
 /** Same placement rules as the builder: max quantities, lofts/vents/gable windows on gable ends,
  *  nothing overlapping (trim included). Items that don't fit slide to the nearest free spot or are dropped. */
 function fitAll(style, size, optById, items) {
   const geo = shedGeometry(style, size), keep = [], counts = {}, seen = new Set();
+  const pkgUids = new Set(items.filter(i => isPackage(optById[i.option_id])).map(i => i.uid));
   for (const raw of items) {
     const it = { ...raw }, o = optById[it.option_id];
-    counts[o.id] = (counts[o.id] || 0) + 1;
-    if (counts[o.id] > (Number(o.max_qty) || 10)) continue;
+    if (it.package_of && !pkgUids.has(it.package_of)) continue;          // part of a package that isn't there
+    if (!it.package_of && o.package_only) continue;                      // only sold inside a package
+    if (!it.package_of) { counts[o.id] = (counts[o.id] || 0) + 1; if (counts[o.id] > (Number(o.max_qty) || 10)) continue; }
     while (seen.has(it.uid)) it.uid += '_'; seen.add(it.uid);
     if (o.placement === 'none') { if (counts[o.id] > 1) continue; it.wall = null; keep.push(it); continue; }
     if (o.placement === 'ceiling' || o.placement === 'roof') { it.wall = o.placement; keep.push(it); continue; }
     if (it.gable && !(WALLS.includes(it.wall) && geo.isGable(it.wall) && gableMode(o) === 'allow')) delete it.gable;
     if (WALLS.includes(it.wall) && canPlace(geo, optById, keep, o, it, it.uid)) { keep.push(it); continue; }
-    const spot = findSpot(geo, optById, keep, o, WALLS.includes(it.wall) ? it.wall : null, it.offset || 0, it.uid, { w: it.w, h: it.h, gable: it.gable });
+    const spot = findSpot(geo, optById, keep, o, WALLS.includes(it.wall) ? it.wall : null, it.offset || 0, it.uid, { w: it.w, h: it.h, gable: it.gable, elev: it.elev });
     if (spot) { const n = { ...it, ...spot }; if (!n.gable) delete n.gable; keep.push(n); }
   }
   return keep;
@@ -277,7 +321,7 @@ export function sanitizeConfig(catalog, raw) {
   }
   const optById = Object.fromEntries(catalog.options.map(o => [o.id, o]));
   const items = (Array.isArray(raw.items) ? raw.items : []).slice(0, 200)
-    .filter(i => i && typeof i === 'object' && optIds.has(Number(i.option_id)) && optionAvailable(style, optById[Number(i.option_id)]))
+    .filter(i => i && typeof i === 'object' && optIds.has(Number(i.option_id)) && (i.package_of || optionAvailable(style, optById[Number(i.option_id)])))
     .map((i, n) => ({
       uid: String(i.uid || 'i' + n).slice(0, 40),
       option_id: Number(i.option_id),
@@ -288,7 +332,13 @@ export function sanitizeConfig(catalog, raw) {
       ...(Number(i.h) > 0 ? { h: clampNum(i.h, 0.25, 20) } : {}),
       standard_of: optIds.has(Number(i.standard_of)) ? Number(i.standard_of) : null,
       ...(i.gable && optById[Number(i.option_id)]?.gable_mode === 'allow' ? { gable: true } : {}),
+      ...(i.package_of ? { package_of: String(i.package_of).slice(0, 60) } : {}),
+      ...(finite(i.elev) ? { elev: clampNum(i.elev, 0, 30) } : {}),
     }));
+  for (const it of [...items]) {
+    if (!isPackage(optById[it.option_id]) || items.some(x => x.package_of === it.uid)) continue;
+    items.push(...placePackage(catalog, style, size, items, it).added);
+  }
   // Standard slots must actually be standard for this style
   const std = new Set((style.standard_options || []).map(s => s.option_id));
   for (const it of items) if (it.standard_of && !std.has(it.standard_of)) it.standard_of = null;

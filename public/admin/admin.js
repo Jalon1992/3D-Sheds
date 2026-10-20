@@ -95,6 +95,14 @@ function wireInputs(root, onChange) {
     root.querySelector(`[name="${k}"]`).value = r.url; root.querySelector(`[data-fn="${k}"]`).textContent = r.name;
     toast('Uploaded ' + r.name); onChange && onChange();
   }));
+  // drag a file onto an upload box
+  root.addEventListener('dragover', e => { const u = e.target.closest('.upl'); if (u) { e.preventDefault(); u.classList.add('drop'); } });
+  root.addEventListener('dragleave', e => { e.target.closest('.upl')?.classList.remove('drop'); });
+  root.addEventListener('drop', e => {
+    const u = e.target.closest('.upl'); if (!u) return; e.preventDefault(); u.classList.remove('drop');
+    const inp = u.querySelector('input[type=file]'); const f = e.dataTransfer?.files?.[0]; if (!inp || !f) return;
+    const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true }));
+  });
   root.addEventListener('click', e => {
     const k = e.target.dataset.clear; if (!k) return;
     root.querySelector(`[name="${k}"]`).value = ''; root.querySelector(`[data-fn="${k}"]`).textContent = 'None'; onChange && onChange();
@@ -386,7 +394,7 @@ function styleEditor(style) {
       <div class="muted" style="font-size:12px;margin-top:6px">Untick anything this style shouldn't offer — customers won't see it on this style. Standard options are always offered. While everything is ticked, options you add later are offered here automatically; once something is unticked, tick new options here to offer them.</div>`;
   };
 
-  const optSel = (v, i) => `<select data-std="${i}" data-k="option_id">${catalog.options.filter(o => o.placement !== 'none').map(o => `<option value="${o.id}" ${o.id === v ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>`;
+  const optSel = (v, i) => `<select data-std="${i}" data-k="option_id">${catalog.options.filter(o => o.placement !== 'none' || (Array.isArray(o.package_items) && o.package_items.length)).map(o => `<option value="${o.id}" ${o.id === v ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>`;
   const colorSel = cat => `<label class="fld"><span>Default ${cat} color</span><select name="dc_${cat}"><option value="">First in list</option>${catalog.colors.filter(c => c.category === cat).map(c => `<option value="${c.id}" ${c.id === s.default_colors?.[cat] ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>`;
   const isBarn = () => (document.querySelector('#sf [name=roof_type]')?.value || s.roof_type) === 'barn';
   const styleVal = k => document.querySelector(`#sf [name=${k}]`)?.value || s[k] || '';
@@ -564,8 +572,11 @@ const OPTION_FIELDS = () => [
   { key: 'category', label: 'Category', type: 'select', options: CATEGORIES },
   { key: 'swap_group', label: 'Swap group', list: 'swapGroups', help: 'Options in the same group can be swapped for each other on the model (e.g. "door").' },
   { key: 'placement', label: 'Where it goes', type: 'select', options: PLACEMENTS, full: true },
-  { key: 'kind', label: 'Built-in 3D model', type: 'select', options: Object.entries(BUILTIN_KINDS), help: 'Used unless you upload a custom .glb model below.' },
-  { key: 'model_url', label: 'Custom 3D model (.glb)', type: 'upload', accept: '.glb,.gltf', help: 'Exported from SketchUp, Blender, etc. It is scaled to the width/height/depth below.' },
+  { type: 'section', label: '3D model' },
+  { type: 'html', html: `<div class="full modelbox" id="modelBox"></div>` },
+  { key: 'model_url', label: 'Your 3D model file (.glb)', type: 'upload', accept: '.glb,.gltf', full: true, help: 'Upload a .glb to replace the built-in model (drag a file onto this box or click Upload). Upload a new file any time to update it. It is stretched to the width × height × depth below.' },
+  { key: 'kind', label: 'Built-in model (used when no file is uploaded)', type: 'select', options: Object.entries(BUILTIN_KINDS), full: true },
+  { type: 'section', label: 'Size & position' },
   { key: 'width', label: 'Width (ft)', type: 'number', step: '0.05' },
   { key: 'height', label: 'Height (ft)', type: 'number', step: '0.05' },
   { key: 'depth', label: 'Depth (ft)', type: 'number', step: '0.05' },
@@ -575,6 +586,7 @@ const OPTION_FIELDS = () => [
   { key: 'price', label: 'Price ($)', type: 'number', step: '0.01' },
   { key: 'price_unit', label: 'Priced', type: 'select', options: PRICE_UNITS },
   { key: 'max_qty', label: 'Max per shed', type: 'number' },
+  { key: 'package_only', label: 'Only sold as part of a package (not listed on its own)', type: 'checkbox', full: true },
   { key: 'sort', label: 'Sort order', type: 'number' },
   { key: 'image_url', label: 'Thumbnail image (optional)', type: 'upload', accept: 'image/*' },
   { key: 'plan_label', label: 'Floor plan label (optional)' },
@@ -588,8 +600,10 @@ async function options() {
   $('#main').innerHTML = head('Options & 3D models', 'Doors, windows, shelves, wiring and upgrades. Each can use a built-in 3D model or your own .glb.', `<button class="btn primary" id="addOpt">+ New option</button>`) + `
     <div class="tabs">${[['', 'All'], ...CATEGORIES].map(([k, l]) => `<button data-cat="${k}" class="${k === cat ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="card tbl-wrap"><table class="tbl"><tr><th>Option</th><th>Category</th><th>Placement</th><th>3D model</th><th>Size (ft)</th><th class="num">Price</th><th>Status</th><th></th></tr>
-    ${list.map(o => `<tr><td><b>${esc(o.name)}</b>${o.swap_group ? `<div class="muted" style="font-size:12px">swap group: ${esc(o.swap_group)}</div>` : ''}</td><td>${esc(o.category)}</td><td class="muted">${esc(o.placement)}</td>
-      <td>${o.model_url ? '<span class="pill on">Custom .glb</span>' : `<span class="muted">${esc(BUILTIN_KINDS[o.kind] || o.kind)}</span>`}</td>
+    ${list.map(o => `<tr><td><b>${esc(o.name)}</b>${Array.isArray(o.package_items) && o.package_items.length ? ` <span class="pill on">Package · ${o.package_items.reduce((n, x) => n + (Number(x.qty) || 1), 0)} items</span>` : ''}${o.package_only ? ' <span class="pill off">package only</span>' : ''}${o.swap_group ? `<div class="muted" style="font-size:12px">swap group: ${esc(o.swap_group)}</div>` : ''}</td><td>${esc(o.category)}</td><td class="muted">${esc(o.placement)}</td>
+      <td style="white-space:nowrap">${o.model_url ? `<span class="pill on" title="${esc(o.model_url.split('/').pop())}">Your file</span>` : `<span class="muted">Built-in: ${esc(BUILTIN_KINDS[o.kind] || o.kind)}</span>`}
+        ${o.placement !== 'none' ? `<div class="row" style="gap:4px;margin-top:4px"><label class="btn ghost sm" title="Upload a .glb file for this option">${o.model_url ? 'Replace' : 'Upload'} .glb<input type="file" accept=".glb,.gltf" data-glb="${o.id}" hidden></label>
+        <button class="btn link sm" data-dlmodel="${o.id}" title="Download the current model to edit">Download</button></div>` : ''}</td>
       <td class="muted">${o.placement === 'none' ? '—' : `${o.width ?? ''} × ${o.height ?? ''}`}</td><td class="num">${fmt(o.price)}${unit(o)}</td>
       <td><span class="pill ${o.active ? 'on' : 'off'}">${o.active ? 'Active' : 'Hidden'}</span></td>
       <td class="num" style="white-space:nowrap"><button class="icon-btn" data-edit="${o.id}">${PENCIL}</button> <button class="icon-btn" data-dup="${o.id}" title="Duplicate">${COPY}</button> <button class="icon-btn" data-del="${o.id}">${TRASH}</button></td></tr>`).join('')}</table></div>`;
@@ -618,14 +632,31 @@ async function options() {
       toast('Window heights saved'); options();
     });
   }
+  $('#main').addEventListener('change', guard(async e => {
+    const id = e.target.dataset.glb; if (!id || !e.target.files[0]) return;
+    const fd = new FormData(); fd.append('file', e.target.files[0]);
+    toast('Uploading ' + e.target.files[0].name + '…');
+    const r = await api('POST', '/api/admin/upload', fd);
+    await api('PATCH', `/api/v1/options/${id}`, { model_url: r.url });
+    toast('3D model updated — customers see it right away'); options();
+  }));
   $('#addOpt').onclick = () => optionEditor(null);
   $('#main').onclick = guard(async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.cat !== undefined) { location.hash = '#/options' + (b.dataset.cat ? '?cat=' + b.dataset.cat : ''); return; }
     if (b.dataset.edit) optionEditor(catalog.options.find(o => o.id === Number(b.dataset.edit)));
+    if (b.dataset.dlmodel) await downloadModel(catalog.options.find(o => o.id === Number(b.dataset.dlmodel)));
     if (b.dataset.dup) { await api('POST', `/api/admin/duplicate/options/${b.dataset.dup}`); toast('Duplicated'); options(); }
     if (b.dataset.del && confirmBox('Delete this option? It will also disappear from styles that include it as standard.')) { await api('DELETE', `/api/v1/options/${b.dataset.del}`); options(); }
   });
+}
+async function downloadModel(o) {
+  const base = (o.name || 'option').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
+  if (o.model_url) { const r = await fetch(o.model_url); if (!r.ok) throw new Error('Could not load the model file'); return saveFile(await r.blob(), `${base}.glb`); }
+  const holder = document.createElement('div'); holder.style.cssText = 'position:fixed;left:-3000px;width:10px;height:10px';
+  document.body.appendChild(holder); const sc = new ShedScene(holder);
+  try { saveFile(await sc.exportOptionGLB(o), `${base}-builtin.glb`); toast('Downloaded — edit it, then upload it back'); }
+  finally { sc.dispose(); holder.remove(); }
 }
 function optionEditor(row) {
   const fields = OPTION_FIELDS();
@@ -641,14 +672,53 @@ function optionEditor(row) {
           const on = !row ? !Array.isArray(st.available_options) : (std || !Array.isArray(st.available_options) || st.available_options.map(Number).includes(row.id));
           return `<label class="chk"><input type="checkbox" data-ost="${st.id}" ${on ? 'checked' : ''} ${std ? 'disabled title="Standard on this style"' : ''}>${esc(st.name)}${std ? ' <span class="muted">(standard)</span>' : ''}</label>`;
         }).join('')}</div>
-        <div class="full muted" style="font-size:12px">Untick a style to hide this option there. Same setting as “Options offered on this style” in the style editor.</div></form>
+        <div class="full muted" style="font-size:12px">Untick a style to hide this option there. Same setting as “Options offered on this style” in the style editor.</div>
+        <div class="section-t">What's in this package <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">(optional — e.g. an electrical package)</span></div>
+        <div class="full" id="pkgBox"></div></form>
       <div><div class="preview3d" id="pv"><div class="pv-note">3D preview</div></div>
       <div class="callout" style="margin-top:12px">Tip: For your own models, export a <b>.glb</b> with the front facing <b>+Z</b> and Y up. It will be stretched to the width × height × depth you enter, so match those to the real product.</div></div></div>`,
     foot: `<span></span><div class="row"><button class="btn ghost" data-cancel>Cancel</button><button class="btn primary" id="osave">Save option</button></div>`,
     onMount: root => {
       modalScene = new ShedScene($('#pv', root));
+      // ---- package contents
+      let pk = (Array.isArray(o.package_items) ? o.package_items : []).map(x => ({ ...x }));
+      const partOpts = () => catalog.options.filter(x => x.id !== (row?.id) && !(Array.isArray(x.package_items) && x.package_items.length) && x.placement !== 'none');
+      const WALL_CH = [['auto', 'Auto'], ['front', 'Front'], ['back', 'Back'], ['left', 'Left'], ['right', 'Right'], ['ceiling', 'Ceiling']];
+      const pkgHTML = () => !pk.length ? `<p class="muted" style="margin:0 0 8px">Not a package. Add items to make this option a package — when a customer adds it, every item below is placed on their shed automatically and included in this option's price.</p><button type="button" class="btn ghost sm" id="pkAdd">+ Add item to package</button>` :
+        `<div style="overflow-x:auto"><table class="mini"><tr><th>Item</th><th>Qty</th><th>Goes on</th><th title="Feet from the centre of the wall, as seen from outside (+ = right). Blank = we pick a free spot.">Position (ft)</th><th title="Height off the floor in feet. Blank = the item's standard height.">Height (ft)</th><th></th></tr>
+        ${pk.map((x, i) => { const io = catalog.options.find(q => q.id === Number(x.option_id)) || {};
+          return `<tr><td><select data-pk="${i}" data-k="option_id" style="min-width:150px;max-width:210px">${partOpts().map(q => `<option value="${q.id}" ${q.id === Number(x.option_id) ? 'selected' : ''}>${esc(q.name)}${q.package_only ? ' (package only)' : ''}</option>`).join('')}</select></td>
+          <td><input type="number" min="1" max="20" step="1" data-pk="${i}" data-k="qty" value="${x.qty ?? 1}" style="width:64px"></td>
+          <td><select data-pk="${i}" data-k="wall" style="min-width:96px">${WALL_CH.filter(([k]) => io.placement === 'ceiling' ? ['ceiling'].includes(k) : k !== 'ceiling').map(([k, l]) => `<option value="${k}" ${(x.wall || 'auto') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+          <td><input type="number" step="0.25" data-pk="${i}" data-k="offset" value="${x.offset ?? ''}" placeholder="auto" style="width:80px"></td>
+          <td>${io.placement === 'ceiling' ? '<span class="muted">ceiling</span>' : `<input type="number" step="0.25" data-pk="${i}" data-k="elev" value="${x.elev ?? ''}" placeholder="${io.elevation ?? ''}" style="width:80px">`}</td>
+          <td><button type="button" class="icon-btn" data-pkrm="${i}">${TRASH}</button></td></tr>`; }).join('')}</table></div>
+        <div class="row" style="margin-top:8px;gap:10px;flex-wrap:wrap"><button type="button" class="btn ghost sm" id="pkAdd">+ Add item</button>
+        <span class="muted" style="font-size:12px">Position = feet from the centre of the wall seen from outside (+ = right). If a spot is taken or the shed is too small, the item goes to the nearest free spot. Customers can move package items but can't remove them on their own.</span></div>`;
+      const redrawPk = () => { $('#pkgBox', root).innerHTML = pkgHTML(); };
+      redrawPk();
+      root.addEventListener('input', e => { const dd = e.target.dataset; if (dd.pk !== undefined) pk[dd.pk][dd.k] = e.target.value; });
+      root.addEventListener('change', e => { const dd = e.target.dataset; if (dd.pk !== undefined) { pk[dd.pk][dd.k] = e.target.value; if (dd.k === 'option_id') { const io = catalog.options.find(q => q.id === Number(e.target.value)); pk[dd.pk].wall = io?.placement === 'ceiling' ? 'ceiling' : 'auto'; redrawPk(); } } });
+      root.addEventListener('click', e => {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.id === 'pkAdd') { const first = partOpts().find(q => q.category === (readFields($('#of', root), fields).category)) || partOpts()[0]; if (first) pk.push({ option_id: first.id, qty: 1, wall: first.placement === 'ceiling' ? 'ceiling' : 'auto', offset: '', elev: '' }); redrawPk(); }
+        if (b.dataset.pkrm !== undefined) { pk.splice(Number(b.dataset.pkrm), 1); redrawPk(); }
+      });
+      const pkOut = () => pk.filter(x => Number(x.option_id)).map(x => ({ option_id: Number(x.option_id), qty: Math.max(1, Math.min(20, Number(x.qty) || 1)), wall: x.wall || 'auto',
+        offset: x.offset === '' || x.offset == null ? null : Number(x.offset), ...(x.elev === '' || x.elev == null ? {} : { elev: Number(x.elev) }) }));
+      const modelBox = () => {
+        const d = readFields($('#of', root), fields);
+        $('#modelBox', root).innerHTML = d.placement === 'none' ? '<span class="muted">No 3D model — this option is a line item only.</span>' :
+          `<div class="row" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><div><b>${d.model_url ? 'Using your file' : 'Using the built-in model'}</b>
+            <div class="muted" style="font-size:12.5px">${d.model_url ? esc(d.model_url.split('/').pop()) : esc(BUILTIN_KINDS[d.kind] || d.kind || '')}</div></div>
+            <div class="row" style="gap:6px"><button type="button" class="btn ghost sm" id="dlModel">Download current model</button>${d.model_url ? '<button type="button" class="btn link sm" id="useBuiltin">Use built-in instead</button>' : ''}</div></div>
+          <ol class="muted steps-ol"><li>Download the current model (or start from your own).</li><li>Edit it in Blender, SketchUp, etc. Front facing <b>+Z</b>, <b>Y</b> up, sitting on the ground.</li><li>Export as <b>.glb</b> and upload it below. It replaces the model everywhere right away.</li></ol>`;
+        $('#dlModel', root) && ($('#dlModel', root).onclick = guard(async () => downloadModel({ ...(row || {}), ...readFields($('#of', root), fields) })));
+        $('#useBuiltin', root) && ($('#useBuiltin', root).onclick = () => { $('[name=model_url]', root).value = ''; $('[data-fn=model_url]', root).textContent = 'None'; preview(); });
+      };
       const preview = () => {
         try {
+          modelBox();
           const d = readFields($('#of', root), fields); modalScene.previewOption(d);
           const el = $('#elevInfo', root);
           if (el) el.innerHTML = d.placement === 'opening' && Number(d.elevation) >= 0
@@ -660,6 +730,7 @@ function optionEditor(row) {
       $('#osave', root).onclick = guard(async () => {
         const d = readFields($('#of', root), fields);
         if (!d.name) throw new Error('Name is required');
+        d.package_items = pkOut();
         const saved = row ? await api('PATCH', `/api/v1/options/${row.id}`, d) : await api('POST', '/api/v1/options', d);
         const id = Number(saved?.id ?? row?.id);
         // per-style availability

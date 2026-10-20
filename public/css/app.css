@@ -331,3 +331,4 @@ h3:first-of-type { margin-top: 0; }
 }
 .nav .btn { white-space: nowrap; }
 @media (max-width: 1280px) { .next-long { display: none; } }
+.opt .meta small.incl { color: var(--brand); font-weight: 600; margin-top: 2px; }

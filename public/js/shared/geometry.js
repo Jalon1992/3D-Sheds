@@ -125,7 +125,8 @@ export function resolvePlacement(geo, opt, item) {
   const sz = itemSize(opt, item);
   const w = sz.w;
   let h = sz.h;
-  if (!WALLS.includes(item.wall)) return { offset: item.offset || 0, elev: Number(opt.elevation) || 0, w, h, fits: true };
+  const baseElev = item.elev !== undefined && item.elev !== null && item.elev !== '' && Number.isFinite(Number(item.elev)) ? Number(item.elev) : Number(opt.elevation) || 0;
+  if (!WALLS.includes(item.wall)) return { offset: item.offset || 0, elev: baseElev, w, h, fits: true };
   const L = geo.wallLen(item.wall);
   const pad = trimPad(geo, opt);
   // exterior items stay clear of the corner boards; interior items clear of the inside wall face
@@ -135,7 +136,7 @@ export function resolvePlacement(geo, opt, item) {
   let offset = Math.max(-L / 2 + margin + span / 2, Math.min(L / 2 - margin - span / 2, Number(item.offset) || 0));
   let fits = true;
   if (span > L - 2 * margin) { offset = 0; fits = opt.placement === 'loft'; }
-  let elev = Number(opt.elevation) || 0;
+  let elev = baseElev;
   if (opt.placement === 'opening' || opt.placement === 'wall_exterior' || opt.placement === 'wall_interior') {
     const top = Math.min(geo.topAt(item.wall, offset - w / 2 - pad.side), geo.topAt(item.wall, offset + w / 2 + pad.side));
     const maxTop = top - (opt.placement === 'opening' ? pad.head + 0.15 : 0.15);
@@ -209,7 +210,7 @@ export function findSpot(geo, optById, items, opt, prefWall, prefOffset = 0, ign
     if (Number(opt.width) > L - 0.8) continue;
     const g = gableMode(opt) === 'only' || (gableMode(opt) === 'allow' && extra.gable && geo.isGable(wall));
     for (const off of spiral(wall === prefWall ? prefOffset : 0, L / 2, 0.25)) {
-      const cand = { wall, offset: off, uid: '__cand', option_id: opt.id, ...(extra.w ? { w: extra.w } : {}), ...(extra.h ? { h: extra.h } : {}), ...(g ? { gable: true } : {}) };
+      const cand = { wall, offset: off, uid: '__cand', option_id: opt.id, ...(extra.w ? { w: extra.w } : {}), ...(extra.h ? { h: extra.h } : {}), ...(extra.elev != null ? { elev: extra.elev } : {}), ...(g ? { gable: true } : {}) };
       const p = resolvePlacement(geo, opt, cand);
       if (Math.abs(p.offset - off) > 0.01 || !p.fits) continue;
       if (!collides(geo, optById, items, opt, cand, ignoreUid)) return { wall, offset: off, ...(g ? { gable: true } : { gable: undefined }) };

@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { shedGeometry, resolvePlacement, FLOOR_Y, WALL_T, rakeTailLevel } from './shared/geometry.js';
 
 const T = WALL_T;
@@ -224,7 +225,9 @@ function makeMaterials(style, colors) {
     roofTex,
     roof: (u, v) => new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e'), map: tiled(roofTex, u, v), roughness: style.roof_material === 'metal' ? 0.4 : 0.95, metalness: style.roof_material === 'metal' ? 0.35 : 0 }),
     roofPlain: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e').multiplyScalar(0.85), roughness: 0.8 }),
-    roofTrim: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e'), roughness: 0.45, metalness: 0.3 }),
+    roofTrim: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e'), roughness: 0.42, metalness: 0.45 }),
+    agPanel: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e'), roughness: 0.38, metalness: 0.55, side: THREE.DoubleSide }),
+    screw: new THREE.MeshStandardMaterial({ color: c(colors.roof, '#3a3c3e').multiplyScalar(0.8), roughness: 0.35, metalness: 0.6 }),
     door: new THREE.MeshStandardMaterial({ color: c(colors.door, colors.trim || '#f4f4ef'), roughness: 0.6 }),
     window: new THREE.MeshStandardMaterial({ color: c(colors.window, colors.trim || '#f4f4ef'), roughness: 0.55 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x9db6c4, roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.55 }),
@@ -315,7 +318,7 @@ function windowUnit(g, w, h, M, opts = {}) {
 }
 
 export const BUILTIN_KINDS = {
-  door_single: 'Single door', door_glass: 'Glass/lite door', door_double: 'Double barn doors', door_french: 'French doors',
+  breaker: 'Breaker box (sub-panel)', switch: 'Light switch', door_single: 'Single door', door_glass: 'Glass/lite door', door_double: 'Double barn doors', door_french: 'French doors',
   door_rollup: 'Roll-up door', window: 'Window', window_shutters: 'Window with shutters', window_transom: 'Transom window',
   vent: 'Gable vent', flowerbox: 'Flower box', ext_light: 'Exterior light', shelf: 'Shelf', workbench: 'Workbench',
   loft: 'Loft', light: 'Ceiling light', outlet: 'Outlet', ramp: 'Ramp', cupola: 'Cupola', box: 'Generic box', none: 'No model (line item only)',
@@ -434,6 +437,20 @@ function buildKind(kind, w, h, d, M, ctx = {}) {
       box(0.03, 0.6, 0.03, M.metal, -w / 3, 0.35, 0, g); box(0.03, 0.6, 0.03, M.metal, w / 3, 0.35, 0, g);
       break;
     }
+    case 'breaker': { // load centre: grey steel box with a door, handle and label
+      box(w, h, Math.min(d, 0.33), M.steel, 0, h / 2, Math.min(d, 0.33) / 2, g);
+      box(w - 0.12, h - 0.12, 0.02, M.white, 0, h / 2, Math.min(d, 0.33) + 0.01, g);
+      box(0.06, 0.22, 0.04, M.dark, w / 2 - 0.16, h / 2, Math.min(d, 0.33) + 0.03, g);
+      box(w * 0.5, 0.12, 0.01, M.dark, 0, h - 0.22, Math.min(d, 0.33) + 0.02, g);
+      // conduit up to the ceiling
+      box(0.07, 1.4, 0.07, M.steel, -w / 4, h + 0.7, 0.05, g);
+      break;
+    }
+    case 'switch': {
+      box(0.23, 0.38, 0.03, M.white, 0, 0.19, 0.015, g);
+      box(0.06, 0.12, 0.04, M.white, 0, 0.19, 0.04, g);
+      break;
+    }
     case 'outlet': {
       box(0.25, 0.4, 0.03, M.white, 0, 0.2, 0.015, g);
       for (const y of [0.12, 0.28]) { box(0.03, 0.07, 0.01, M.dark, -0.04, y, 0.035, g); box(0.03, 0.07, 0.01, M.dark, 0.04, y, 0.035, g); }
@@ -506,6 +523,8 @@ export class ShedScene {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
+    // Soft studio reflections for painted steel (applied to metal materials only)
+    try { const pm = new THREE.PMREMGenerator(this.renderer); this.envTex = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); } catch { this.envTex = null; }
 
     this.scene = new THREE.Scene();
     if (background) {
@@ -701,6 +720,18 @@ export class ShedScene {
 
     const geo = this.geo = shedGeometry(style, size);
     const M = this.M = makeMaterials({ ...style, roof_material: config.roof_material || style.roof_material }, colors);
+    if ((config.roof_material || style.roof_material) === 'metal') {
+      // painted steel: ridge cap & trims match the panels, all with soft reflections
+      M.roofPlain.roughness = 0.42; M.roofPlain.metalness = 0.45; M.roofPlain.color.copy(M.agPanel.color);
+      // light colors (Galvalume, Polar White) read as bare/bright steel: more metal, slightly darker base so they don't wash out
+      const hsl = {}; M.agPanel.color.getHSL(hsl);
+      const bare = hsl.l > 0.55 && hsl.s < 0.12;
+      for (const m of [M.agPanel, M.screw, M.roofTrim, M.roofPlain]) {
+        m.envMap = this.envTex; m.envMapIntensity = bare ? 0.7 : 0.5;
+        if (bare) { m.metalness = 0.8; m.roughness = 0.32; m.color.multiplyScalar(0.78); }
+      }
+    }
+    if (M.steel) M.steel.envMap = this.envTex;
     M.cw = (style.casing_trim === null || style.casing_trim === undefined || style.casing_trim === '' ? 4 : Number(style.casing_trim)) / 12;
     const { W, D, H } = geo;
     const y0 = FLOOR_Y;
@@ -806,6 +837,41 @@ export class ShedScene {
     const lapAt = {}; // segment index → which end (0|1) is lapped
     for (let i = 1; i < nSeg; i++) if (i !== peakIdx) { const upper = i < peakIdx ? i : i - 1; lapAt[upper] = i < peakIdx ? 0 : 1; }
 
+    // ---- Ag Panel: real corrugated steel. 36" sheets, 3/4" trapezoid major ribs every 9" with two
+    // small stiffening ribs between them; ribs run down the slope; screws in rows every 2 ft.
+    const RIB_H = 0.0625;
+    const agProfile = (() => {
+      const pts = [], hw = RL, sp = 0.75, bh = 0.11, th2 = 0.04, mh = 0.012, mw = 0.035;
+      pts.push([-hw, 0]);
+      for (let c = -hw + sp / 2; c < hw - 0.01; c += sp) {
+        // two stiffening ribs in the flat before this major rib
+        for (const f of [-sp * 2 / 3 + 0.04, -sp / 3 + 0.02]) { const m = c + f; if (m - mw > -hw && m + mw < hw) pts.push([m - mw, 0], [m, mh], [m + mw, 0]); }
+        if (c - bh > -hw && c + bh < hw) pts.push([c - bh, 0], [c - th2, RIB_H], [c + th2, RIB_H], [c + bh, 0]);
+      }
+      pts.push([hw, 0], [hw, -0.008], [-hw, -0.008]);
+      return pts;
+    })();
+    const agShape = new THREE.Shape(agProfile.map(([x, y]) => new THREE.Vector2(x, y)));
+    const screwGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.03, 8);
+    const agPanel = (A, Bp, segIdx) => {
+      const len = Math.hypot(Bp[0] - A[0], Bp[1] - A[1]); if (len < 0.05) return;
+      const u = [(Bp[0] - A[0]) / len, (Bp[1] - A[1]) / len], n = normal(segIdx);
+      const geo = new THREE.ExtrudeGeometry(agShape, { depth: len, bevelEnabled: false, curveSegments: 1 });
+      const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(n[0], n[1], 0), new THREE.Vector3(u[0], u[1], 0));
+      m.setPosition(A[0], A[1], 0); geo.applyMatrix4(m); geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, M.agPanel); mesh.castShadow = mesh.receiveShadow = true; mesh.userData.solid = true; roofG.add(mesh);
+      // screws: beside each major rib, rows every 2 ft down the slope
+      const rows = []; for (let d = 0.6; d < len - 0.3; d += 2) rows.push(d); rows.push(len - 0.25);
+      const ribs = []; for (let c = -RL + 0.375; c < RL - 0.01; c += 0.75) ribs.push(c + 0.2);
+      const inst = new THREE.InstancedMesh(screwGeo, M.screw, rows.length * ribs.length);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(n[0], n[1], 0));
+      const mm = new THREE.Matrix4(); let k = 0;
+      for (const d of rows) for (const z of ribs) {
+        mm.compose(new THREE.Vector3(A[0] + u[0] * d + n[0] * 0.012, A[1] + u[1] * d + n[1] * 0.012, -z), q, new THREE.Vector3(1, 1, 1));
+        inst.setMatrixAt(k++, mm);
+      }
+      inst.userData.solid = true; roofG.add(inst);
+    };
     for (let i = 0; i < nSeg; i++) {
       const B0 = prof[i], B1 = prof[i + 1];
       let T0 = top[i], T1 = top[i + 1];
@@ -822,7 +888,7 @@ export class ShedScene {
       if (lapAt[i] !== undefined) {
         // lift the lapped end over the trim and run it a couple of inches past the bend
         // metal: over the transition trim; shingles: the upper courses simply lap the lower ones
-        const lift = metalRoof ? ct + 0.012 : 0.02, lap = metalRoof ? 0.18 : 0.3;
+        const lift = metalRoof ? RIB_H + ct + 0.012 : 0.02, lap = metalRoof ? 0.18 : 0.3;
         const [ux, uy] = dirOf(T0, T1);
         if (lapAt[i] === 0) T0 = [T0[0] - ux * lap + n[0] * lift, T0[1] - uy * lap + n[1] * lift];
         else T1 = [T1[0] + ux * lap + n[0] * lift, T1[1] + uy * lap + n[1] * lift];
@@ -833,6 +899,7 @@ export class ShedScene {
       g.setAttribute('position', new THREE.Float32BufferAttribute([T0[0], T0[1], -RL, T1[0], T1[1], -RL, T1[0], T1[1], RL, T0[0], T0[1], RL], 3));
       g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
       g.setIndex([0, 2, 1, 0, 3, 2]); g.computeVertexNormals();
+      if (metalRoof) { agPanel(T0, T1, i); continue; }
       const rm = M.roof(len, ridgeLen); rm.side = THREE.DoubleSide;
       const skin = new THREE.Mesh(g, rm); skin.castShadow = skin.receiveShadow = true; skin.userData.solid = true; roofG.add(skin);
     }
@@ -879,8 +946,8 @@ export class ShedScene {
         cap.position.z = -RL - ext; cap.castShadow = true; cap.userData.solid = true; roofG.add(cap);
       } else {
         // Transition trim: lies on the LOWER slope; the upper roofing laps over it
-        const lower = i < peakIdx ? i - 1 : i;
-        leafOn(P, i < peakIdx ? top[i - 1] : top[i + 1], lower, capW);
+        const lower = i < peakIdx ? i - 1 : i, nl = normal(lower);
+        leafOn([P[0] + nl[0] * RIB_H, P[1] + nl[1] * RIB_H], i < peakIdx ? top[i - 1] : top[i + 1], lower, capW);
       }
     }
 
@@ -1039,6 +1106,17 @@ export class ShedScene {
   }
 
   /** Admin preview of a single option on a small wall section. */
+  /** Export one option's built-in 3D model as a .glb (a starting file to edit in Blender/SketchUp). */
+  async exportOptionGLB(opt, colors = {}) {
+    const M = makeMaterials({ siding_type: 'lap', roof_material: 'shingle' }, { siding: '#c2b49a', trim: '#f4f4ef', roof: '#3a3c3e', door: '#f4f4ef', ...colors });
+    M.cw = 4 / 12;
+    const w = Math.max(Number(opt.width) || 1, 0.3), h = Math.max(Number(opt.height) || 1, 0.1), d = Number(opt.depth) || 0.3;
+    const g = new THREE.Group(); g.name = opt.name || 'option';
+    g.add(buildKind(opt.kind || 'box', w, h, d, M, { floorY: 0.75 }));
+    g.scale.setScalar(0.3048); // feet → metres (glTF units)
+    const data = await new Promise((res, rej) => new GLTFExporter().parse(g, res, rej, { binary: true }));
+    return new Blob([data], { type: 'model/gltf-binary' });
+  }
   previewOption(opt, colors = {}) {
     this.root.traverse(o => { if (o.geometry) o.geometry.dispose(); });
     this.root.clear();

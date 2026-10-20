@@ -105,7 +105,18 @@ export function seed() {
   opt('radiant', { name: 'Radiant Barrier Roof', category: 'upgrades', kind: 'none', placement: 'none', price: 1.25, price_unit: 'per_sqft', max_qty: 1, sort: s++ });
   opt('floor', { name: '3/4" Floor Upgrade', category: 'upgrades', kind: 'none', placement: 'none', price: 0.85, price_unit: 'per_sqft', max_qty: 1, sort: s++ });
   opt('anchor', { name: 'Anchor Kit', category: 'upgrades', kind: 'none', placement: 'none', price: 175, max_qty: 1, sort: s++ });
+  // Electrical parts that come in packages (breaker box is only sold as part of a package)
+  opt('breaker', { name: 'Breaker Box (60A sub-panel)', category: 'electrical', kind: 'breaker', placement: 'wall_interior', width: 1.2, height: 1.75, depth: 0.33, elevation: 3.75, price: 450, max_qty: 1, package_only: 1, sort: 10 });
+  opt('switch', { name: 'Light Switch', category: 'electrical', kind: 'switch', placement: 'wall_interior', width: 0.25, height: 0.4, depth: 0.08, elevation: 3.8, price: 45, sort: 11 });
   opt('gablewin', { name: 'Gable Window (24" x 16")', description: 'Small fixed window up in the gable end.', category: 'windows', kind: 'window', placement: 'opening', swap_group: 'window', gable_mode: 'only', width: 2, height: 1.33, elevation: 0, price: 145, sort: 99 });
+
+  // What comes in the Electrical Package, and where each part goes (wall + feet from the wall centre, seen from outside)
+  run('UPDATE options SET package_items = ? WHERE id = ?', JSON.stringify([
+    { option_id: O.breaker, qty: 1, wall: 'back', offset: -2 },
+    { option_id: O.outlet, qty: 2, wall: 'auto', offset: null },
+    { option_id: O.switch, qty: 1, wall: 'front', offset: 2.25 },
+    { option_id: O.led, qty: 2, wall: 'ceiling', offset: null },
+  ]), O.elec);
 
   // ---- Styles + sizes
   const style = (st, sizes, perSqft, baseAdd) => {

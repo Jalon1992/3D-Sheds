@@ -41,7 +41,8 @@ export function floorPlanSVG(catalog, config, meta = {}) {
   // Openings by wall to cut gaps
   const items = (config.items || []).filter(it => optById[it.option_id]).map(it => { const o = optById[it.option_id]; const z = itemSize(o, it); return { it, o: { ...o, width: z.w, height: z.h } }; });
   const gaps = { front: [], back: [], left: [], right: [] };
-  for (const { it, o } of items) if (o.placement === 'opening' && gaps[it.wall]) gaps[it.wall].push([it.offset - o.width / 2, it.offset + o.width / 2, o, it]);
+  const iw = (o, it) => (Number(it.w) > 0 ? Number(it.w) : Number(o.width) || 1);
+  for (const { it, o } of items) if (o.placement === 'opening' && gaps[it.wall] && !it.gable && o.gable_mode !== 'only' && o.kind !== 'vent') gaps[it.wall].push([it.offset - iw(o, it) / 2, it.offset + iw(o, it) / 2, o, it]);
 
   // Walls with gaps
   for (const wall of ['front', 'back', 'left', 'right']) {
@@ -60,11 +61,12 @@ export function floorPlanSVG(catalog, config, meta = {}) {
   }
 
   // Items
+  const elec = new Set();
   for (const { it, o } of items) {
     const kind = o.kind || '';
     if (o.placement === 'opening') {
       const p = wallPoint(it.wall, it.offset, size);
-      const w = o.width * S;
+      const w = iw(o, it) * S;
       const ang = Math.atan2(p.nz, p.nx) * 180 / Math.PI - 90; // rotate so local +x runs along the wall
       const cx = X(p.x) - p.nx * T / 2, cz = Z(p.z) - p.nz * T / 2;
       out.push(`<g transform="translate(${cx} ${cz}) rotate(${ang})">`);
@@ -94,7 +96,7 @@ export function floorPlanSVG(catalog, config, meta = {}) {
       // label just outside the wall; side-wall labels are anchored away from the wall so they never overlap it
       const lp = { x: X(p.x) + p.nx * 22, z: Z(p.z) + p.nz * 30 };
       const anchor = p.nx < 0 ? 'end' : p.nx > 0 ? 'start' : 'middle';
-      out.push(`<text x="${lp.x}" y="${lp.z + 4}" font-size="12" text-anchor="${anchor}" fill="#3b4744">${esc(shortName(o))}</text>`);
+      out.push(`<text x="${lp.x}" y="${lp.z + 4}" font-size="12" text-anchor="${anchor}" fill="#3b4744">${esc(shortName(o) + (it.gable || o.gable_mode === 'only' ? ' (in gable)' : ''))}</text>`);
       continue;
     }
     if (o.placement === 'wall_interior' || o.placement === 'floor') {
@@ -105,6 +107,13 @@ export function floorPlanSVG(catalog, config, meta = {}) {
       out.push(`<g transform="translate(${cx} ${cz}) rotate(${ang})">`);
       if (kind === 'outlet') {
         out.push(`<circle cx="0" cy="${-8}" r="7" fill="#fff" stroke="#1d2624" stroke-width="1.5"/><line x1="-3" y1="-14" x2="-3" y2="-2" stroke="#1d2624"/><line x1="3" y1="-14" x2="3" y2="-2" stroke="#1d2624"/>`);
+        elec.add('outlet');
+      } else if (kind === 'switch') {
+        out.push(`<text x="0" y="-4" font-size="15" font-weight="bold" text-anchor="middle" fill="#1d2624" transform="rotate(${-ang} 0 -9)">S</text>`);
+        elec.add('switch');
+      } else if (kind === 'breaker') {
+        out.push(`<rect x="${-w / 2}" y="${-Math.max(d, 10)}" width="${w}" height="${Math.max(d, 10)}" fill="#1d2624"/><text x="0" y="${-Math.max(d, 10) - 6}" font-size="11" font-weight="bold" text-anchor="middle" fill="#1d2624" transform="rotate(${-ang} 0 ${-Math.max(d, 10) - 10})">PANEL</text>`);
+        elec.add('breaker');
       } else {
         out.push(`<rect x="${-w / 2}" y="${-d}" width="${w}" height="${d}" fill="${kind === 'workbench' ? '#efe6d6' : 'none'}" stroke="#55615e" stroke-width="1.5" ${kind === 'shelf' ? 'stroke-dasharray="6 3"' : ''}/>`);
         out.push(`<text x="0" y="${-d / 2 + 4}" font-size="11" text-anchor="middle" fill="#3b4744" transform="rotate(${-ang} 0 ${-d / 2})">${esc(shortName(o))}</text>`);
@@ -123,7 +132,10 @@ export function floorPlanSVG(catalog, config, meta = {}) {
       continue;
     }
     if (o.placement === 'ceiling') {
-      const cx = X(0), cz = Z(it.offset || 0);
+      // ceiling items run along the ridge
+      const alongZ = style.ridge_axis !== 'width';
+      const cx = alongZ ? X(0) : X(it.offset || 0), cz = alongZ ? Z(it.offset || 0) : Z(0);
+      elec.add('light');
       out.push(`<circle cx="${cx}" cy="${cz}" r="10" fill="#fff" stroke="#1d2624" stroke-width="1.5"/><path d="M ${cx - 7} ${cz - 7} L ${cx + 7} ${cz + 7} M ${cx + 7} ${cz - 7} L ${cx - 7} ${cz + 7}" stroke="#1d2624" stroke-width="1.5"/>`);
       continue;
     }
@@ -156,7 +168,20 @@ export function floorPlanSVG(catalog, config, meta = {}) {
   out.push(`<text x="24" y="${ty + 54}" font-size="13" fill="#3b4744">${esc(settings.company_name || '')}${who ? ' · Prepared for ' + esc(who) : ''}${meta.quote_number ? ' · Quote ' + esc(meta.quote_number) : ''}</text>`);
   const roofName = (roofingList(catalog).find(r => r.key === config.roof_material) || {}).name;
   out.push(`<text x="24" y="${ty + 74}" font-size="12" fill="#7d8885">${roofName ? esc(roofName) + ' roof · ' : ''}${esc(meta.date || new Date().toLocaleDateString('en-US'))} · Scale: 1 grid square = 1 ft · Door swings shown inward</text>`);
-  // north/legend
+  // electrical legend
+  if (elec.size) {
+    const L = [['outlet', 'Outlet'], ['switch', 'Switch'], ['light', 'Ceiling light'], ['breaker', 'Breaker panel']].filter(([k]) => elec.has(k));
+    let lx = vbW - 24;
+    for (const [k, label] of L.reverse()) {
+      const tw = label.length * 6.4 + 30; lx -= tw;
+      const sy = ty + 26;
+      if (k === 'outlet') out.push(`<circle cx="${lx + 8}" cy="${sy}" r="7" fill="#fff" stroke="#1d2624" stroke-width="1.5"/><line x1="${lx + 5}" y1="${sy - 5}" x2="${lx + 5}" y2="${sy + 5}" stroke="#1d2624"/><line x1="${lx + 11}" y1="${sy - 5}" x2="${lx + 11}" y2="${sy + 5}" stroke="#1d2624"/>`);
+      if (k === 'switch') out.push(`<text x="${lx + 8}" y="${sy + 5}" font-size="15" font-weight="bold" text-anchor="middle" fill="#1d2624">S</text>`);
+      if (k === 'light') out.push(`<circle cx="${lx + 8}" cy="${sy}" r="8" fill="#fff" stroke="#1d2624" stroke-width="1.5"/><path d="M ${lx + 3} ${sy - 5} L ${lx + 13} ${sy + 5} M ${lx + 13} ${sy - 5} L ${lx + 3} ${sy + 5}" stroke="#1d2624" stroke-width="1.5"/>`);
+      if (k === 'breaker') out.push(`<rect x="${lx}" y="${sy - 5}" width="16" height="10" fill="#1d2624"/>`);
+      out.push(`<text x="${lx + 21}" y="${sy + 4}" font-size="12" fill="#3b4744">${label}</text>`);
+    }
+  }
   out.push(`</svg>`);
   return out.join('\n');
 }

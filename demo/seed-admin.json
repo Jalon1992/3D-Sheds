@@ -919,7 +919,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 0,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 2,
@@ -941,7 +943,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 1,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 3,
@@ -963,7 +967,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 2,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 4,
@@ -985,7 +991,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 3,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 5,
@@ -1007,7 +1015,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 4,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 6,
@@ -1029,7 +1039,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 5,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 7,
@@ -1051,7 +1063,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 6,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 20,
@@ -1073,7 +1087,34 @@
     "max_qty": 1,
     "active": 1,
     "sort": 0,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": [
+     {
+      "option_id": 27,
+      "qty": 1,
+      "wall": "back",
+      "offset": -2
+     },
+     {
+      "option_id": 22,
+      "qty": 2,
+      "wall": "auto",
+      "offset": null
+     },
+     {
+      "option_id": 28,
+      "qty": 1,
+      "wall": "front",
+      "offset": 2.25
+     },
+     {
+      "option_id": 21,
+      "qty": 2,
+      "wall": "ceiling",
+      "offset": null
+     }
+    ],
+    "package_only": 0
    },
    {
     "id": 21,
@@ -1095,7 +1136,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 1,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 22,
@@ -1117,7 +1160,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 2,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 16,
@@ -1139,7 +1184,57 @@
     "max_qty": 10,
     "active": 1,
     "sort": 4,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
+   },
+   {
+    "id": 27,
+    "name": "Breaker Box (60A sub-panel)",
+    "description": null,
+    "category": "electrical",
+    "kind": "breaker",
+    "placement": "wall_interior",
+    "swap_group": null,
+    "width": 1.2,
+    "height": 1.75,
+    "depth": 0.33,
+    "elevation": 3.75,
+    "price": 450,
+    "price_unit": "each",
+    "model_url": null,
+    "image_url": null,
+    "plan_label": null,
+    "max_qty": 1,
+    "active": 1,
+    "sort": 10,
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 1
+   },
+   {
+    "id": 28,
+    "name": "Light Switch",
+    "description": null,
+    "category": "electrical",
+    "kind": "switch",
+    "placement": "wall_interior",
+    "swap_group": null,
+    "width": 0.25,
+    "height": 0.4,
+    "depth": 0.08,
+    "elevation": 3.8,
+    "price": 45,
+    "price_unit": "each",
+    "model_url": null,
+    "image_url": null,
+    "plan_label": null,
+    "max_qty": 10,
+    "active": 1,
+    "sort": 11,
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 12,
@@ -1161,7 +1256,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 0,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 13,
@@ -1183,7 +1280,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 1,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 14,
@@ -1205,7 +1304,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 2,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 15,
@@ -1227,7 +1328,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 3,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 17,
@@ -1249,7 +1352,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 0,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 18,
@@ -1271,7 +1376,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 1,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 19,
@@ -1293,7 +1400,9 @@
     "max_qty": 2,
     "active": 1,
     "sort": 2,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 23,
@@ -1315,7 +1424,9 @@
     "max_qty": 1,
     "active": 1,
     "sort": 0,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 24,
@@ -1337,7 +1448,9 @@
     "max_qty": 1,
     "active": 1,
     "sort": 1,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 25,
@@ -1359,7 +1472,9 @@
     "max_qty": 1,
     "active": 1,
     "sort": 2,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 26,
@@ -1381,7 +1496,9 @@
     "max_qty": 1,
     "active": 1,
     "sort": 3,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 8,
@@ -1403,7 +1520,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 0,
-    "gable_mode": "allow"
+    "gable_mode": "allow",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 9,
@@ -1425,7 +1544,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 1,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 10,
@@ -1447,7 +1568,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 2,
-    "gable_mode": ""
+    "gable_mode": "",
+    "package_items": null,
+    "package_only": 0
    },
    {
     "id": 11,
@@ -1469,10 +1592,12 @@
     "max_qty": 10,
     "active": 1,
     "sort": 3,
-    "gable_mode": "allow"
+    "gable_mode": "allow",
+    "package_items": null,
+    "package_only": 0
    },
    {
-    "id": 27,
+    "id": 29,
     "name": "Gable Window (24\" x 16\")",
     "description": "Small fixed window up in the gable end.",
     "category": "windows",
@@ -1491,7 +1616,9 @@
     "max_qty": 10,
     "active": 1,
     "sort": 99,
-    "gable_mode": "only"
+    "gable_mode": "only",
+    "package_items": null,
+    "package_only": 0
    }
   ],
   "settings": {
