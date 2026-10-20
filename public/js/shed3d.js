@@ -886,9 +886,9 @@ export class ShedScene {
       const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: ridgeLen, bevelEnabled: false }), M.trim);
       slab.position.z = -RL; slab.castShadow = slab.receiveShadow = true; slab.userData.solid = true; roofG.add(slab);
       if (lapAt[i] !== undefined) {
-        // lift the lapped end over the trim and run it a couple of inches past the bend
-        // metal: over the transition trim; shingles: the upper courses simply lap the lower ones
-        const lift = metalRoof ? RIB_H + ct + 0.012 : 0.02, lap = metalRoof ? 0.18 : 0.3;
+        // metal: the upper panels lift over the transition trim and run a couple of inches past the bend.
+        // shingles: lie flat and bend over the break — the two surfaces just overlap a sliver so no seam shows.
+        const lift = metalRoof ? RIB_H + ct + 0.012 : 0.003, lap = metalRoof ? 0.18 : 0.03;
         const [ux, uy] = dirOf(T0, T1);
         if (lapAt[i] === 0) T0 = [T0[0] - ux * lap + n[0] * lift, T0[1] - uy * lap + n[1] * lift];
         else T1 = [T1[0] + ux * lap + n[0] * lift, T1[1] + uy * lap + n[1] * lift];
