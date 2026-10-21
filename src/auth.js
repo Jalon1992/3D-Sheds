@@ -90,4 +90,4 @@ export function requireSession(req, res, next) {
   if (!user) return res.status(401).json({ error: 'Not logged in' });
   req.user = user; next();
 }
-export { readSession };
+export { readSession, readApiKey };

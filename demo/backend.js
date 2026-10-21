@@ -2,7 +2,7 @@
 // can run as static pages. Data is kept in this browser's localStorage (shared by both demo pages).
 // Nothing is sent anywhere: webhooks, GoHighLevel and emails only work on the deployed app.
 import seed from './seed-admin.json';
-import { priceConfig, sanitizeConfig, defaultConfig } from '../public/js/shared/pricing.js';
+import { priceConfig, sanitizeConfig, defaultConfig, stripPrices, hideQuotePrices } from '../public/js/shared/pricing.js';
 import { floorPlanSVG } from '../public/js/shared/floorplan.js';
 import { formatQuote } from '../public/js/shared/quote-format.js';
 
@@ -94,15 +94,22 @@ on('GET', /^\/api\/auth\/me$/, () => (loggedOut() ? err('Not logged in', 401) : 
 on('POST', /^\/api\/auth\/login$/, () => { try { sessionStorage.removeItem(KEY + '-out'); } catch { /* */ } return json(db.users[0]); });
 on('POST', /^\/api\/auth\/logout$/, () => { try { sessionStorage.setItem(KEY + '-out', '1'); } catch { /* */ } return json({ ok: true }); });
 
-on('GET', /^\/api\/v1\/catalog$/, () => json(catalog(false)));
+// Dealer-facing configurator in the demo: the admin's "Open configurator" link adds #staff, which signs
+// this tab in as the admin "View as" user. A plain link to the builder is the customer configurator.
+try { if (location.hash === '#staff') { sessionStorage.setItem(KEY + '-dealer', '1'); history.replaceState(null, '', location.pathname + location.search); } } catch { /* */ }
+const dealerViewer = () => { try { if (sessionStorage.getItem(KEY + '-dealer') !== '1' || loggedOut()) return null; } catch { return null; } const u = currentUser(); return { dealer_mode: true, name: u.name || u.email, role: u.role, dealer_id: u.dealer_id || null }; };
+const pricesPublic = () => db.settings.show_prices !== false;
+on('GET', /^\/api\/v1\/catalog$/, () => { const v = dealerViewer(); if (v) return json({ ...catalog(false), viewer: v }); return json(pricesPublic() ? catalog(false) : stripPrices(catalog(false))); });
 on('GET', /^\/api\/admin\/catalog$/, () => json(catalog(true)));
 on('GET', /^\/api\/admin\/settings$/, () => json({ ...db.settings, ghl_token: db.settings.ghl_token ? '••••••••' + String(db.settings.ghl_token).slice(-4) : '' }));
 on('PUT', /^\/api\/admin\/settings$/, (m, b) => { if (typeof b.ghl_token === 'string' && b.ghl_token.startsWith('••••')) delete b.ghl_token; Object.assign(db.settings, b); save(); return json({ ok: true }); });
 
-on('POST', /^\/api\/v1\/price$/, (m, b) => { try { const cat = catalog(false); const p = priceConfig(cat, sanitizeConfig(cat, b)); delete p.style; return json(p); } catch (e) { return err(e.message); } });
-on('GET', /^\/api\/v1\/shared\/([a-f0-9]+)$/, m => { const q = db.quotes.find(x => x.token === m[1]); return q ? json({ number: q.number, config: q.config, total: q.total }) : err('Not found', 404); });
+on('POST', /^\/api\/v1\/price$/, (m, b) => { if (!pricesPublic() && !dealerViewer()) return err('Prices are not shown publicly.', 403); try { const cat = catalog(false); const p = priceConfig(cat, sanitizeConfig(cat, b)); delete p.style; return json(p); } catch (e) { return err(e.message); } });
+on('GET', /^\/api\/v1\/shared\/([a-f0-9]+)$/, m => { const q = db.quotes.find(x => x.token === m[1]); return q ? json({ number: q.number, config: q.config, ...(pricesPublic() || dealerViewer() ? { total: q.total } : {}) }) : err('Not found', 404); });
 on('POST', /^\/api\/v1\/quotes$/, (m, b) => {
-  try { const q = createQuote(b.config, b.customer || {}, b.source); logEvent('quote.created', q); return json(fmt(q), 201); }
+  const v = dealerViewer();
+  const cfg = v?.dealer_id && b.config ? { ...b.config, dealer_id: v.dealer_id } : b.config;
+  try { const q = createQuote(cfg, b.customer || {}, v ? `Dealer configurator — ${v.name}` : b.source); logEvent('quote.created', q); return json(v || pricesPublic() ? fmt(q) : hideQuotePrices(fmt(q)), 201); }
   catch (e) { return err(e.message); }
 });
 on('GET', /^\/api\/v1\/quotes$/, (m, b, url) => {

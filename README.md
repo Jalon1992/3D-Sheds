@@ -131,6 +131,12 @@ Models are stretched to the width × height × depth you enter, so match those t
 
 ---
 
+## Showing prices: customer vs dealer configurator
+
+- **Customer-facing configurator** (your public link / website embed): Admin → Settings → **Show prices to customers**. When it's off, customers see no prices anywhere: no totals, no option prices, "Price on request" in the footer, and a *design* PDF without prices. Prices aren't even sent to their browser (the public catalog comes back with prices zeroed and the public price API refuses), so nobody can dig them out. Quotes are still priced on the server and sent to you, your webhooks and GHL with full pricing.
+- **Dealer-facing configurator**: open the configurator while signed in to the admin (**Open configurator (dealer mode)**). It **always shows prices**, whatever the setting, and has a *Dealer mode* badge with a **Customer view** switch to preview exactly what customers see. Any staff login works (admin, sales, production). Sales/production users tied to a dealer lot are locked to that lot and its price tier. Quotes made this way are marked *Dealer configurator — name*, so you can tell them apart in Quotes.
+- Give lot staff their own login (Account & users → role *Sales*, pick their lot) and have them sign in on the lot's tablet. The configurator then works as their dealer tool.
+
 ## Price tiers, dealer lots & ZIP pricing
 
 Admin → **Price tiers & dealers**.

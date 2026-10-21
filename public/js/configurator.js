@@ -59,7 +59,9 @@ const ROOF_ICON = {
 // Helpers
 // ---------------------------------------------------------------------------
 const S = () => state.catalog.settings || {};
-const showPrices = () => S().show_prices !== false;
+// Dealer-facing configurator (signed-in staff) always shows prices; customers see them only if the setting is on.
+const showPrices = () => (state.dealer && !state.customerView) || S().show_prices !== false;
+const CV_KEY = 'shedbuilder-customer-view';
 const fmt = n => money(n, S().currency_symbol || '$');
 const curStyle = () => state.catalog.styles.find(s => s.id === state.config.style_id);
 const curSize = () => curStyle()?.sizes.find(z => z.id === state.config.size_id);
@@ -97,7 +99,7 @@ function renderLoc() {
   if (m === 'dealer') {
     const dealers = state.base.settings.dealers || [];
     const cur = findDealer(state.base, state.config.dealer_id);
-    if (state.lockDealer && cur) return `<div class="locbar"><span>Pricing for</span><b>${esc(cur.name)}</b>${cur.city ? `<small>${esc(cur.city)}${cur.state ? ', ' + esc(cur.state) : ''}</small>` : ''}</div>`;
+    if (state.lockDealer && cur) return `<div class="locbar"><span>${showPrices() ? 'Pricing for' : 'Your dealer'}</span><b>${esc(cur.name)}</b>${cur.city ? `<small>${esc(cur.city)}${cur.state ? ', ' + esc(cur.state) : ''}</small>` : ''}</div>`;
     return `<div class="locbar ${cur ? '' : 'need'}"><label for="dealerSel">Your dealer lot</label>
       <select id="dealerSel"><option value="">${cur ? '' : 'Choose your nearest lot…'}</option>${dealers.map(d => `<option value="${esc(d.id)}" ${String(d.id) === String(state.config.dealer_id) ? 'selected' : ''}>${esc(d.name)}${d.city ? ' — ' + esc(d.city) + (d.state ? ', ' + esc(d.state) : '') : ''}</option>`).join('')}</select>
       ${cur ? '' : '<small>Prices are for your local lot. Choose one to see your price.</small>'}</div>`;
@@ -528,10 +530,10 @@ function renderDone() {
   const q = state.submitted;
   return `<div class="done"><div class="ok"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></div>
     <h2>Quote sent!</h2><p class="sub">${esc(S().success_message || 'Thanks! We will be in touch shortly.')}</p>
-    <div class="qn">Quote ${esc(q.number)}${showPrices() ? ' · ' + fmt(q.pricing.total) : ''}</div>
+    <div class="qn">Quote ${esc(q.number)}${showPrices() && q.pricing && !q.pricing.hidden ? ' · ' + fmt(q.pricing.total) : ''}</div>
     <div class="stack">
       <button class="btn ghost block" data-dl="glb"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/></svg>Download 3D model (.glb)</button>
-      ${S().customer_pdf !== false ? `<button class="btn primary block" data-dl="quotepdf"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6m0 6-3-3m3 3 3-3"/></svg>Download quote PDF</button>` : ''}
+      ${S().customer_pdf !== false ? `<button class="btn primary block" data-dl="quotepdf"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6m0 6-3-3m3 3 3-3"/></svg>${showPrices() ? 'Download quote PDF' : 'Download design PDF'}</button>` : ''}
       <button class="btn ghost block" data-dl="plan"><svg viewBox="0 0 24 24"><path d="M3 3h18v18H3zM3 12h7M14 3v7M14 14v7"/></svg>View / print floor plan</button>
       <button class="btn ghost block" data-dl="link"><svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Copy link to my design</button>
     </div></div>`;
@@ -629,10 +631,11 @@ async function downloadQuotePDF(btn) {
   const label = btn.innerHTML; btn.disabled = true; btn.textContent = 'Building your PDF…';
   try {
     const p = pricing();
-    const quote = { ...q, config: state.config, pricing_lines: p.lines, pricing: { ...q.pricing, tax_rate: p.tax_rate },
+    const quote = { ...q, config: state.config, pricing_lines: p.lines, pricing: { ...(q.pricing || {}), tax_rate: p.tax_rate },
       created_at: new Date().toISOString().replace('T', ' ').slice(0, 19), dealer: p.dealer || q.dealer || null };
-    const blob = await buildDrawingPackage(state.catalog, quote, { company: S().company_name || '', withPricing: true, terms: S().quote_terms || '', money: fmt });
-    saveBlob(blob, `${q.number}-quote.pdf`); toast('Quote PDF downloaded');
+    const priced = showPrices() && q.pricing && !q.pricing.hidden;
+    const blob = await buildDrawingPackage(state.catalog, quote, { company: S().company_name || '', withPricing: priced, terms: priced ? S().quote_terms || '' : '', money: fmt });
+    saveBlob(blob, `${q.number}-${priced ? 'quote' : 'design'}.pdf`); toast(priced ? 'Quote PDF downloaded' : 'Design PDF downloaded');
   } catch (e) { console.error(e); toast('Could not build the PDF'); }
   finally { btn.disabled = false; btn.innerHTML = label; }
 }
@@ -670,6 +673,20 @@ $('#views').onclick = e => {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
+function renderDealerBadge() {
+  let el = $('#dealerBadge');
+  if (!el) { el = document.createElement('div'); el.id = 'dealerBadge'; el.className = 'dealer-badge'; $('#topbar .brand').after(el); }
+  const cv = state.customerView;
+  el.classList.toggle('cv', !!cv);
+  el.innerHTML = `<span class="dot"></span><span class="dl-txt">${cv ? 'Customer view' : 'Dealer mode'}</span><span class="dl-who">· ${esc(state.dealer.name || '')}</span>
+    <button type="button" id="dealerToggle" title="${cv ? 'Back to dealer mode (prices always shown)' : 'Preview exactly what customers see'}">${cv ? 'Dealer mode' : 'Customer view'}</button>`;
+  $('#dealerToggle').onclick = () => {
+    state.customerView = !state.customerView;
+    try { sessionStorage.setItem(CV_KEY, state.customerView ? '1' : '0'); } catch { /* */ }
+    renderDealerBadge(); renderPanel(); if (state.selected) selectItem(state.selected);
+    toast(state.customerView ? `Customer view — prices are ${S().show_prices !== false ? 'shown' : 'hidden'} for customers` : 'Dealer mode — prices always shown');
+  };
+}
 async function boot() {
   if (params.get('embed') === '1') document.body.classList.add('embed');
   if (matchMedia('(pointer: coarse)').matches) $('#hint').textContent = 'Tip: tap a door or window to change it · press and drag to move it · pinch to zoom';
@@ -678,10 +695,17 @@ async function boot() {
   if (!cat.styles.length) { $('#panel').innerHTML = '<h2>Coming soon</h2><p class="sub">No shed styles have been published yet. Add some in the admin.</p>'; $('#loading').classList.add('gone'); return; }
   optById = Object.fromEntries(cat.options.map(o => [o.id, o]));
   const st = cat.settings || {};
+  if (cat.viewer?.dealer_mode) {
+    state.dealer = cat.viewer;
+    try { state.customerView = sessionStorage.getItem(CV_KEY) === '1'; } catch { /* */ }
+    renderDealerBadge();
+  }
   // Location: ?dealer=ID or #dealer-ID locks the dealer (one link per lot); otherwise remember the last choice
   let savedLoc = {}; try { savedLoc = JSON.parse(localStorage.getItem(LOC_KEY) || '{}') || {}; } catch { /* ignore */ }
   const urlDealer = params.get('dealer') || (location.hash.match(/^#dealer-([A-Za-z0-9._~-]+)$/) || [])[1];
   if (urlDealer && findDealer(cat, urlDealer)) { savedLoc.dealer_id = findDealer(cat, urlDealer).id; state.lockDealer = true; }
+  // lot staff signed in to the dealer configurator always quote for their own lot
+  if (state.dealer?.dealer_id && findDealer(cat, state.dealer.dealer_id)) { savedLoc.dealer_id = findDealer(cat, state.dealer.dealer_id).id; state.lockDealer = true; }
   if (params.get('zip')) savedLoc.zip = params.get('zip');
   if (st.brand_color) document.documentElement.style.setProperty('--brand', st.brand_color);
   $('#company').textContent = st.company_name || 'Shed Builder';

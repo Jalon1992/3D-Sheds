@@ -363,3 +363,27 @@ export function wallPoint(wall, offset, size) {
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 function round2(n) { return Math.round(n * 100) / 100; }
 function clampNum(v, a, b) { v = Number(v) || 0; return Math.max(a, Math.min(b, v)); }
+
+// ---------------------------------------------------------------------------
+// Price visibility. Customers see prices only when settings.show_prices is on; signed-in staff
+// (the dealer-facing configurator) always see them. When hidden, prices never leave the server.
+// ---------------------------------------------------------------------------
+export function stripPrices(cat) {
+  const c = structuredClone(cat);
+  for (const st of c.styles || []) for (const z of st.sizes || []) z.price = 0;
+  for (const o of c.options || []) o.price = 0;
+  for (const col of c.colors || []) col.price = 0;
+  const s = c.settings || (c.settings = {});
+  s.roofing = (s.roofing || []).map(r => ({ ...r, price: 0 }));
+  s.price_tiers = (s.price_tiers || []).map(t => ({ id: t.id, name: t.name, adjust_pct: 0, delivery_fee: 0, overrides: {} }));
+  s.delivery_fee = 0; s.tax_rate = 0; s.prices_hidden = true;
+  return c;
+}
+/** Remove every price from a formatted quote (customer response when prices are hidden). */
+export function hideQuotePrices(out) {
+  const o = { ...out, pricing: { hidden: true } };
+  o.options = (out.options || []).map(({ price, ...x }) => x);
+  o.summary = String(out.summary || '').replace(/\s*\|\s*Total:[^|]*$/, '');
+  delete o.pricing_lines;
+  return o;
+}

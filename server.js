@@ -8,10 +8,10 @@ import { fileURLToPath } from 'node:url';
 
 import { db, all, get, run, getSettings, setSettings, getCatalog, JSON_COLS } from './src/db.js';
 import { seed } from './src/seed.js';
-import { requireAuth, requireSession, issueSession, clearSession, verifyPassword, hashPassword, createApiKey, readSession, ROLES } from './src/auth.js';
+import { requireAuth, requireSession, issueSession, clearSession, verifyPassword, hashPassword, createApiKey, readSession, readApiKey, ROLES } from './src/auth.js';
 import { emit, deliver, formatQuote, recentLog, pushToGHL, EVENTS } from './src/integrations.js';
 import { openapi } from './src/openapi.js';
-import { priceConfig, sanitizeConfig } from './public/js/shared/pricing.js';
+import { priceConfig, sanitizeConfig, stripPrices, hideQuotePrices } from './public/js/shared/pricing.js';
 import { floorPlanSVG } from './public/js/shared/floorplan.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -53,11 +53,25 @@ function rateLimit(max, windowMs) {
 // =============================================================================
 //  PUBLIC API
 // =============================================================================
-app.get('/api/v1/catalog', (req, res) => res.json(getCatalog()));
+// Price visibility: customers see prices only when "Show prices to customers" is on.
+// Signed-in staff (admin / sales / production) get the dealer-facing configurator, which always shows prices.
+const pricesPublic = () => getSettings().show_prices !== false;
+function dealerViewer(req) {
+  const u = readSession(req);
+  return u ? { dealer_mode: true, name: u.name || u.email, role: u.role, dealer_id: u.dealer_id || null } : null;
+}
+const canSeePrices = req => pricesPublic() || !!readSession(req) || !!readApiKey(req);
+app.get('/api/v1/catalog', (req, res) => {
+  const viewer = dealerViewer(req);
+  res.set('Cache-Control', 'private, no-store');
+  if (viewer) return res.json({ ...getCatalog(), viewer });
+  res.json(pricesPublic() ? getCatalog() : stripPrices(getCatalog()));
+});
 
 // Health check for Railway/Render/Docker: answers once the database is reachable
 app.get('/healthz', (req, res) => { try { get('SELECT 1 AS ok'); res.json({ ok: true }); } catch (e) { res.status(503).json({ ok: false }); } });
 app.post('/api/v1/price', (req, res) => {
+  if (!canSeePrices(req)) return bad(res, 'Prices are not shown publicly. Send an API key to price a configuration.', 403);
   try {
     const cat = getCatalog();
     const cfg = sanitizeConfig(cat, req.body);
@@ -67,7 +81,11 @@ app.post('/api/v1/price', (req, res) => {
 });
 
 app.post('/api/v1/quotes', rateLimit(8, 60000), wrap(async (req, res) => {
-  const { config, customer = {}, source, utm } = req.body || {};
+  const { config: rawConfig, customer = {}, source: rawSource, utm } = req.body || {};
+  const viewer = dealerViewer(req);
+  // dealer-facing configurator: lot staff always quote for their own lot
+  const config = viewer?.dealer_id && rawConfig && typeof rawConfig === 'object' ? { ...rawConfig, dealer_id: viewer.dealer_id } : rawConfig;
+  const source = viewer ? `Dealer configurator — ${viewer.name}` : rawSource;
   if (!customer.first_name || !customer.email) return bad(res, 'first_name and email are required');
   if (!/^\S+@\S+\.\S+$/.test(customer.email)) return bad(res, 'email looks invalid');
   const cat = getCatalog();
@@ -89,14 +107,14 @@ app.post('/api/v1/quotes', rateLimit(8, 60000), wrap(async (req, res) => {
   emit('quote.created', q, baseUrl(req));
   const out = formatQuote(q, baseUrl(req));
   delete out.links.admin; delete out.integrations;
-  res.status(201).json(out);
+  res.status(201).json(viewer || pricesPublic() ? out : hideQuotePrices(out));
 }));
 
 // Customer-facing quote by secret token (reload in configurator / floor plan link in emails)
 app.get('/api/v1/shared/:token', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE token = ?', req.params.token);
   if (!q) return bad(res, 'Not found', 404);
-  res.json({ number: q.number, first_name: q.first_name, last_name: q.last_name, config: q.config, total: q.total, created_at: q.created_at });
+  res.json({ number: q.number, first_name: q.first_name, last_name: q.last_name, config: q.config, ...(canSeePrices(req) ? { total: q.total } : {}), created_at: q.created_at });
 });
 app.get('/q/:token/floorplan.svg', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE token = ?', req.params.token);

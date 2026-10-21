@@ -184,7 +184,7 @@ async function dashboard() {
     [hooks.length > 0 || keys.length > 0, 'Add a webhook or API key for other software', '#/integrations/webhooks'],
     [true, 'Review styles, sizes and prices', '#/styles'],
   ];
-  $('#main').innerHTML = head('Dashboard', `Welcome back${me.name ? ', ' + esc(me.name) : ''}.`, `<a class="btn ghost" href="${CONFIG_URL}" target="_blank">Open configurator ↗</a>`) + `
+  $('#main').innerHTML = head('Dashboard', `Welcome back${me.name ? ', ' + esc(me.name) : ''}.`, `<a class="btn ghost" href="${CONFIG_URL}" target="_blank" title="Opens the dealer-facing configurator: prices always shown">Open configurator (dealer mode) ↗</a>`) + `
   <div class="grid g4">
     <div class="card card-pad stat"><div class="lbl">Quotes (30 days)</div><div class="val">${s.last30}</div></div>
     <div class="card card-pad stat"><div class="lbl">Quoted value (30 days)</div><div class="val">${fmt(s.value30)}</div></div>
@@ -906,7 +906,7 @@ const SETTINGS_FIELDS = [
   { key: 'logo_url', label: 'Logo', type: 'upload', accept: 'image/*' }, { key: 'brand_color', label: 'Brand color', type: 'color' },
   { key: 'phone', label: 'Phone (shown in header)' }, { key: 'website', label: 'Website' },
   { type: 'section', label: 'Pricing' },
-  { key: 'show_prices', label: 'Show prices to customers', type: 'checkbox' }, { key: 'currency_symbol', label: 'Currency symbol' },
+  { key: 'show_prices', label: 'Show prices to customers (customer-facing configurator)', type: 'checkbox', full: true, help: 'Off = customers see no prices anywhere: no totals, no option prices, and their PDF has no prices. Prices are not sent to their browser at all. The dealer-facing configurator, opened while signed in here (Open configurator), always shows prices.' }, { key: 'currency_symbol', label: 'Currency symbol' },
   { key: 'delivery_fee', label: 'Delivery fee ($)', type: 'number', step: '0.01' }, { key: 'tax_rate', label: 'Sales tax (%)', type: 'number', step: '0.001' },
   { key: 'tax_delivery', label: 'Charge tax on delivery', type: 'checkbox' },
   { key: 'downgrade_credit', label: 'Lower the price when a customer swaps a standard item (door, window, roofing) for a cheaper one', type: 'checkbox', full: true },
@@ -1071,7 +1071,7 @@ async function pricingPage() {
     if (b.id === 'addDealer') { dealers.push({ id: newId(), name: 'New dealer lot', tier: Number(defTier) }); render(); }
     if (d.deld !== undefined && confirmBox('Remove this dealer lot?')) { dealers.splice(+d.deld, 1); render(); }
     if (d.link !== undefined) {
-      const dl = dealers[+d.link]; const url = `${(window.__configuratorUrl ? new URL(window.__configuratorUrl, location.href).href : origin + '/')}#dealer-${dl.id}`;
+      const dl = dealers[+d.link]; const url = `${(window.__configuratorUrl ? new URL(window.__configuratorUrl, location.href).href.split('#')[0] : origin + '/')}#dealer-${dl.id}`;
       try { await navigator.clipboard.writeText(url); toast('Link copied: ' + url); } catch { prompt('Copy this link', url); }
     }
     if (b.id === 'addZip') { zips.push({ match: '', tier: Number(defTier) }); render(); }

@@ -1,5 +1,5 @@
 // Admin demo setup: point "Open configurator" at the builder page and show a banner.
-window.__configuratorUrl = 'index.html';
+window.__configuratorUrl = 'index.html#staff'; // opens the dealer-facing configurator (prices always shown)
 addEventListener('DOMContentLoaded', () => {
   const b = document.createElement('div');
   b.className = 'demo-banner';
