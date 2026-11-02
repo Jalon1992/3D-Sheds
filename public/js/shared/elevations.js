@@ -123,9 +123,19 @@ export function elevationSVG(catalog, config, wall, opts = {}) {
           o.push(`<line x1="${(x0 + x1) / 2}" y1="${y0}" x2="${(x0 + x1) / 2}" y2="${y1}" stroke="#1d2624" stroke-width="1.4"/>`);
           if (kind === 'door_double') for (const [a, b] of [[x0, (x0 + x1) / 2], [(x0 + x1) / 2, x1]]) o.push(`<path d="M${a} ${y0}L${b} ${y1}M${b} ${y0}L${a} ${y1}" stroke="#1d2624" stroke-opacity=".5" fill="none"/>`);
           else for (const [a, b] of [[x0, (x0 + x1) / 2], [(x0 + x1) / 2, x1]]) o.push(`<rect x="${a + 6}" y="${y0 + 6}" width="${b - a - 12}" height="${hpx * 0.75}" fill="#dfe8ee" stroke="#1d2624" stroke-opacity=".6"/>`);
+        } else if (kind === 'door_carriage' || kind === 'door_carriage_double') {
+          const nL = kind === 'door_carriage_double' ? 2 : 1, lwp = (x1 - x0) / nL;
+          for (let L = 0; L < nL; L++) {
+            const a = x0 + L * lwp, b = a + lwp, st = lwp * 0.12, wt = y0 + hpx * 0.04, wb = wt + hpx * 0.16, mid = y0 + hpx * 0.56;
+            if (L) o.push(`<line x1="${a}" y1="${y0}" x2="${a}" y2="${y1}" stroke="#1d2624"/>`);
+            o.push(`<rect x="${a + st}" y="${wt}" width="${lwp - 2 * st}" height="${wb - wt}" fill="#3a4448" stroke="#1d2624"/>`);
+            for (let k = 1; k < 5; k++) o.push(`<line x1="${a + st + (lwp - 2 * st) * k / 5}" y1="${wt}" x2="${a + st + (lwp - 2 * st) * k / 5}" y2="${wb}" stroke="#ffffff" stroke-width="1.5"/>`);
+            o.push(`<rect x="${a + st}" y="${wb + hpx * 0.05}" width="${lwp - 2 * st}" height="${mid - wb - hpx * 0.08}" fill="none" stroke="#1d2624" stroke-opacity=".6"/>`);
+            o.push(`<rect x="${a + st}" y="${mid + hpx * 0.03}" width="${lwp - 2 * st}" height="${y1 - mid - hpx * 0.1}" fill="none" stroke="#1d2624" stroke-opacity=".6"/>`);
+          }
         } else if (kind === 'door_glass') o.push(`<rect x="${x0 + wpx * 0.18}" y="${y0 + hpx * 0.08}" width="${wpx * 0.64}" height="${hpx * 0.4}" fill="#dfe8ee" stroke="#1d2624" stroke-opacity=".6"/>`);
         else { o.push(`<rect x="${x0 + wpx * 0.15}" y="${y0 + hpx * 0.08}" width="${wpx * 0.7}" height="${hpx * 0.36}" fill="none" stroke="#1d2624" stroke-opacity=".5"/><rect x="${x0 + wpx * 0.15}" y="${y0 + hpx * 0.54}" width="${wpx * 0.7}" height="${hpx * 0.36}" fill="none" stroke="#1d2624" stroke-opacity=".5"/>`); }
-        if (kind !== 'door_rollup') o.push(`<circle cx="${kind === 'door_double' || kind === 'door_french' ? (x0 + x1) / 2 + 7 : x1 - 9}" cy="${y0 + hpx * 0.53}" r="3" fill="#1d2624"/>`);
+        if (kind !== 'door_rollup') o.push(`<circle cx="${kind === 'door_double' || kind === 'door_french' || kind === 'door_carriage_double' ? (x0 + x1) / 2 + 7 : x1 - 9}" cy="${y0 + hpx * 0.53}" r="3" fill="#1d2624"/>`);
       } else if (kind === 'vent') {
         o.push(`<rect x="${x0}" y="${y0}" width="${wpx}" height="${hpx}" fill="#ffffff" stroke="#1d2624" stroke-width="1.2"/>`);
         for (let k = 1; k < 5; k++) o.push(`<line x1="${x0}" y1="${y0 + hpx * k / 5}" x2="${x1}" y2="${y0 + hpx * k / 5}" stroke="#1d2624" stroke-opacity=".6"/>`);

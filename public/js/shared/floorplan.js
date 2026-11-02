@@ -76,7 +76,7 @@ export function floorPlanSVG(catalog, config, meta = {}) {
           out.push(`<line x1="${-w / 2}" y1="0" x2="${w / 2}" y2="0" stroke="#1d2624" stroke-width="2" stroke-dasharray="6 4"/>`);
           out.push(`<rect x="${-w / 2}" y="${-T / 2}" width="${w}" height="${T}" fill="none" stroke="#1d2624" stroke-width="1"/>`);
         } else {
-          const leaves = (kind === 'door_double' || kind === 'door_french') ? 2 : 1;
+          const leaves = (kind === 'door_double' || kind === 'door_french' || kind === 'door_carriage_double') ? 2 : 1;
           const lw = w / leaves;
           out.push(`<line x1="${-w / 2}" y1="0" x2="${w / 2}" y2="0" stroke="#fff" stroke-width="${T + 2}"/>`);
           for (let k = 0; k < leaves; k++) {

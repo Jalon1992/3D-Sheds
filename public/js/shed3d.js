@@ -271,6 +271,52 @@ function casing(g, w, h, M, zOut, withSill) {
   box(w + cw * 2 + 0.1, cw, ct + 0.02, M.trim, 0, h + cw / 2, zOut + ct / 2, g);
   if (withSill) box(w + cw * 2 + 0.2, 0.12, 0.28, M.trim, 0, -0.06, zOut + 0.1, g);
 }
+// Carriage-house door leaf (matches the 72" double / 36" single carriage doors): 5-lite window across the top,
+// framed upper & lower panels of vertical boards, black strap hinges on the hinge side.
+// Body = door color, window grid = trim color, hardware black.
+function carriageLeaf(g, w, h, M, x, zf, hingeSide) {
+  const T0 = 0.1, F = 0.05;                     // slab and frame-board thickness
+  const groove = M.doorGroove || (M.doorGroove = M.door.clone());
+  groove.color = M.door.color.clone().multiplyScalar(0.72);
+  box(w, h, T0, M.door, x, h / 2, zf, g);
+  const zb = zf + T0 / 2 + F / 2, s = Math.min(0.36, w * 0.12);   // stile width ~4.3"
+  const topR = 0.24, winH = Math.min(0.95, h * 0.16), underWin = 0.3, midR = 0.36, botR = 0.42;
+  const yWinTop = h - topR, yWinBot = yWinTop - winH, yMid = h * 0.44;
+  // stiles & rails (raised boards)
+  box(s, h, F, M.door, x - w / 2 + s / 2, h / 2, zb, g);
+  box(s, h, F, M.door, x + w / 2 - s / 2, h / 2, zb, g);
+  const iw = w - 2 * s;
+  box(iw, topR, F, M.door, x, h - topR / 2, zb, g);
+  box(iw, underWin, F, M.door, x, yWinBot - underWin / 2, zb, g);
+  box(iw, midR, F, M.door, x, yMid, zb, g);
+  box(iw, botR, F, M.door, x, botR / 2, zb, g);
+  // vertical board grooves in the two panels
+  const panels = [[botR, yMid - midR / 2], [yMid + midR / 2, yWinBot - underWin]];
+  const boards = Math.max(3, Math.round(iw / 0.33));
+  for (const [y0, y1] of panels) for (let k = 1; k < boards; k++) box(0.018, y1 - y0, 0.004, groove, x - iw / 2 + iw * k / boards, (y0 + y1) / 2, zf + T0 / 2 + 0.002, g);
+  // shadow line where the raised frame meets each panel, so the frame reads like the real door
+  const zl = zf + T0 / 2 + 0.003;
+  for (const [y0, y1] of panels) {
+    box(iw, 0.03, 0.006, groove, x, y0 + 0.015, zl, g); box(iw, 0.03, 0.006, groove, x, y1 - 0.015, zl, g);
+    box(0.03, y1 - y0, 0.006, groove, x - iw / 2 + 0.015, (y0 + y1) / 2, zl, g); box(0.03, y1 - y0, 0.006, groove, x + iw / 2 - 0.015, (y0 + y1) / 2, zl, g);
+  }
+  // 5-lite window: dark glass, trim-colored frame and muntins
+  const wy = (yWinTop + yWinBot) / 2, gz = zf + T0 / 2;
+  box(iw, winH, 0.02, M.glassDark || (M.glassDark = new THREE.MeshStandardMaterial({ color: 0x1b2226, roughness: 0.12, metalness: 0.4 })), x, wy, gz, g);
+  const fb = 0.06, mz = gz + 0.02;
+  box(iw, fb, 0.04, M.trim, x, yWinTop - fb / 2, mz, g); box(iw, fb, 0.04, M.trim, x, yWinBot + fb / 2, mz, g);
+  box(fb, winH, 0.04, M.trim, x - iw / 2 + fb / 2, wy, mz, g); box(fb, winH, 0.04, M.trim, x + iw / 2 - fb / 2, wy, mz, g);
+  for (let k = 1; k < 5; k++) box(0.045, winH, 0.035, M.trim, x - iw / 2 + iw * k / 5, wy, mz, g);
+  // strap hinges on the hinge side: strap + pointed tip + pintle plate on the edge
+  const hz = zb + F / 2 + 0.012, ex = x + hingeSide * (w / 2);
+  for (const y of [h * 0.86, h * 0.47, h * 0.09]) {
+    const len = Math.min(0.95, w * 0.34);
+    box(len, 0.1, 0.02, M.metal, ex - hingeSide * len / 2, y, hz, g);
+    const tip = box(0.1, 0.1, 0.02, M.metal, ex - hingeSide * (len + 0.02), y, hz, g); tip.rotation.z = Math.PI / 4;
+    box(0.08, 0.32, 0.03, M.metal, ex - hingeSide * 0.03, y, hz + 0.005, g);
+    for (const d of [0.15, 0.4, 0.65]) if (d < len) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 8), M.metal); b.rotation.x = Math.PI / 2; b.position.set(ex - hingeSide * d, y, hz + 0.012); g.add(b); }
+  }
+}
 function panelDoorLeaf(g, w, h, M, x, z) {
   box(w, h, 0.12, M.door, x, h / 2, z, g);
   const pw = w - 0.5;
@@ -318,7 +364,7 @@ function windowUnit(g, w, h, M, opts = {}) {
 }
 
 export const BUILTIN_KINDS = {
-  breaker: 'Breaker box (sub-panel)', switch: 'Light switch', door_single: 'Single door', door_glass: 'Glass/lite door', door_double: 'Double barn doors', door_french: 'French doors',
+  breaker: 'Breaker box (sub-panel)', switch: 'Light switch', door_single: 'Single door', door_carriage: 'Carriage-house door (single)', door_carriage_double: 'Carriage-house double doors', door_glass: 'Glass/lite door', door_double: 'Double barn doors', door_french: 'French doors',
   door_rollup: 'Roll-up door', window: 'Window', window_shutters: 'Window with shutters', window_transom: 'Transom window',
   vent: 'Gable vent', flowerbox: 'Flower box', ext_light: 'Exterior light', shelf: 'Shelf', workbench: 'Workbench',
   loft: 'Loft', light: 'Ceiling light', outlet: 'Outlet', ramp: 'Ramp', cupola: 'Cupola', box: 'Generic box', none: 'No model (line item only)',
@@ -345,6 +391,24 @@ function buildKind(kind, w, h, d, M, ctx = {}) {
       glassLeaf(g, w / 2 - 0.04, h - 0.04, M, -w / 4, zOut - 0.12, [2, 5], 0.82);
       glassLeaf(g, w / 2 - 0.04, h - 0.04, M, w / 4, zOut - 0.12, [2, 5], 0.82);
       handle(g, -0.18, 3.1, zOut - 0.02, M); handle(g, 0.18, 3.1, zOut - 0.02, M);
+      break;
+    }
+    case 'door_carriage': { // 36" single carriage-house door: hinges on the left, knob on the right
+      casing(g, w, h, M, zOut);
+      carriageLeaf(g, w - 0.04, h - 0.02, M, 0, zOut - 0.06, -1);
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), M.metal); k.position.set(w / 2 - 0.42, h * 0.47, zOut + 0.08); g.add(k);
+      box(0.12, 0.22, 0.03, M.metal, w / 2 - 0.42, h * 0.47, zOut + 0.02, g);
+      break;
+    }
+    case 'door_carriage_double': { // 72" carriage-house double doors: hinges on the outer edges, knob + top latch at the centre
+      casing(g, w, h, M, zOut);
+      const lw = w / 2 - 0.025;
+      carriageLeaf(g, lw, h - 0.02, M, -w / 4, zOut - 0.06, -1);
+      carriageLeaf(g, lw, h - 0.02, M, w / 4, zOut - 0.06, 1);
+      box(0.07, h - 0.06, 0.03, M.door, 0.03, h / 2, zOut + 0.02, g);            // astragal over the meeting edge
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), M.metal); k.position.set(-0.3, h * 0.47, zOut + 0.08); g.add(k);
+      box(0.12, 0.22, 0.03, M.metal, -0.3, h * 0.47, zOut + 0.02, g);
+      box(0.32, 0.07, 0.04, M.metal, 0, h - 0.4, zOut + 0.04, g);               // top barrel latch
       break;
     }
     case 'door_double': {

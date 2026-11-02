@@ -110,6 +110,9 @@ export function seed() {
   opt('switch', { name: 'Light Switch', category: 'electrical', kind: 'switch', placement: 'wall_interior', width: 0.25, height: 0.4, depth: 0.08, elevation: 3.8, price: 45, sort: 11 });
   opt('gablewin', { name: 'Gable Window (24" x 16")', description: 'Small fixed window up in the gable end.', category: 'windows', kind: 'window', placement: 'opening', swap_group: 'window', gable_mode: 'only', width: 2, height: 1.33, elevation: 0, price: 145, sort: 99 });
 
+  // Carriage-house doors (built-in models: body takes the door color, window grids take the trim color)
+  opt('carriage72', { name: '72" Carriage House Double Doors', category: 'doors', kind: 'door_carriage_double', placement: 'opening', swap_group: 'door', width: 6, height: 71.5 / 12, price: 895, sort: 7, description: 'Double doors with 5-lite transom windows, raised panels and black strap hinges.' });
+  opt('carriage36', { name: '36" Single Carriage House Door', category: 'doors', kind: 'door_carriage', placement: 'opening', swap_group: 'door', width: 3, height: 71.5 / 12, price: 450, sort: 8, description: 'Single door with 5-lite transom window, raised panels and black strap hinges.' });
   // What comes in the Electrical Package, and where each part goes (wall + feet from the wall centre, seen from outside)
   run('UPDATE options SET package_items = ? WHERE id = ?', JSON.stringify([
     { option_id: O.breaker, qty: 1, wall: 'back', offset: -2 },
