@@ -265,6 +265,7 @@ function rbox(w, h, d, r, mat, x, y, z, parent) {
 // z = outward. For "opening" kinds, z = 0 is the CENTRE of the wall (exterior face at +T/2).
 // ---------------------------------------------------------------------------
 function casing(g, w, h, M, zOut, withSill) {
+  if (M.noCasing) return; // exported .glb files: the builder adds its own trim around the opening
   const cw = M.cw ?? 0.33, ct = 0.06;
   box(cw, h + cw, ct, M.trim, -w / 2 - cw / 2, (h + cw) / 2, zOut + ct / 2, g);
   box(cw, h + cw, ct, M.trim, w / 2 + cw / 2, (h + cw) / 2, zOut + ct / 2, g);
@@ -1173,7 +1174,7 @@ export class ShedScene {
   /** Export one option's built-in 3D model as a .glb (a starting file to edit in Blender/SketchUp). */
   async exportOptionGLB(opt, colors = {}) {
     const M = makeMaterials({ siding_type: 'lap', roof_material: 'shingle' }, { siding: '#c2b49a', trim: '#f4f4ef', roof: '#3a3c3e', door: '#f4f4ef', ...colors });
-    M.cw = 4 / 12;
+    M.cw = 4 / 12; M.noCasing = opt.placement === 'opening';
     const w = Math.max(Number(opt.width) || 1, 0.3), h = Math.max(Number(opt.height) || 1, 0.1), d = Number(opt.depth) || 0.3;
     const g = new THREE.Group(); g.name = opt.name || 'option';
     g.add(buildKind(opt.kind || 'box', w, h, d, M, { floorY: 0.75 }));
