@@ -308,14 +308,13 @@ function carriageLeaf(g, w, h, M, x, zf, hingeSide) {
   box(iw, fb, 0.04, M.trim, x, yWinTop - fb / 2, mz, g); box(iw, fb, 0.04, M.trim, x, yWinBot + fb / 2, mz, g);
   box(fb, winH, 0.04, M.trim, x - iw / 2 + fb / 2, wy, mz, g); box(fb, winH, 0.04, M.trim, x + iw / 2 - fb / 2, wy, mz, g);
   for (let k = 1; k < 5; k++) box(0.045, winH, 0.035, M.trim, x - iw / 2 + iw * k / 5, wy, mz, g);
-  // strap hinges on the hinge side: strap + pointed tip + pintle plate on the edge
-  const hz = zb + F / 2 + 0.012, ex = x + hingeSide * (w / 2);
-  for (const y of [h * 0.86, h * 0.47, h * 0.09]) {
-    const len = Math.min(0.95, w * 0.34);
-    box(len, 0.1, 0.02, M.metal, ex - hingeSide * len / 2, y, hz, g);
-    const tip = box(0.1, 0.1, 0.02, M.metal, ex - hingeSide * (len + 0.02), y, hz, g); tip.rotation.z = Math.PI / 4;
-    box(0.08, 0.32, 0.03, M.metal, ex - hingeSide * 0.03, y, hz + 0.005, g);
-    for (const d of [0.15, 0.4, 0.65]) if (d < len) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 8), M.metal); b.rotation.x = Math.PI / 2; b.position.set(ex - hingeSide * d, y, hz + 0.012); g.add(b); }
+  // regular (butt-style) hinges on the hinge edge: top, middle and bottom, each on a rail, clear of the window
+  const ex = x + hingeSide * (w / 2), hz = zb + F / 2 + 0.008;
+  for (const y of [h - topR - winH - underWin / 2, yMid, botR / 2 + 0.05]) {
+    box(0.29, 0.33, 0.02, M.metal, ex - hingeSide * 0.13, y, hz, g);            // hinge leaf (3.5" x 4")
+    const k = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.34, 10), M.metal);
+    k.position.set(ex - hingeSide * 0.005, y, hz + 0.015); g.add(k);              // knuckle
+    for (const dy of [-0.1, 0.1]) { const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.012, 8), M.steel); sc.rotation.x = Math.PI / 2; sc.position.set(ex - hingeSide * 0.17, y + dy, hz + 0.012); g.add(sc); }
   }
 }
 function panelDoorLeaf(g, w, h, M, x, z) {
@@ -406,10 +405,11 @@ function buildKind(kind, w, h, d, M, ctx = {}) {
       const lw = w / 2 - 0.025;
       carriageLeaf(g, lw, h - 0.02, M, -w / 4, zOut - 0.06, -1);
       carriageLeaf(g, lw, h - 0.02, M, w / 4, zOut - 0.06, 1);
-      box(0.07, h - 0.06, 0.03, M.door, 0.03, h / 2, zOut + 0.02, g);            // astragal over the meeting edge
-      const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), M.metal); k.position.set(-0.3, h * 0.47, zOut + 0.08); g.add(k);
-      box(0.12, 0.22, 0.03, M.metal, -0.3, h * 0.47, zOut + 0.02, g);
-      box(0.32, 0.07, 0.04, M.metal, 0, h - 0.4, zOut + 0.04, g);               // top barrel latch
+      box(0.07, h - 0.06, 0.03, M.door, 0.035, h / 2, zOut + 0.02, g);           // astragal: right door laps over the meeting edge
+      // knob on the LEFT door, on its stile next to the meeting edge
+      const kx = -0.2;
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), M.metal); k.position.set(kx, h * 0.47, zOut + 0.1); g.add(k);
+      box(0.12, 0.22, 0.03, M.metal, kx, h * 0.47, zOut + 0.04, g);
       break;
     }
     case 'door_double': {
