@@ -308,13 +308,19 @@ function carriageLeaf(g, w, h, M, x, zf, hingeSide) {
   box(iw, fb, 0.04, M.trim, x, yWinTop - fb / 2, mz, g); box(iw, fb, 0.04, M.trim, x, yWinBot + fb / 2, mz, g);
   box(fb, winH, 0.04, M.trim, x - iw / 2 + fb / 2, wy, mz, g); box(fb, winH, 0.04, M.trim, x + iw / 2 - fb / 2, wy, mz, g);
   for (let k = 1; k < 5; k++) box(0.045, winH, 0.035, M.trim, x - iw / 2 + iw * k / 5, wy, mz, g);
-  // regular (butt-style) hinges on the hinge edge: top, middle and bottom, each on a rail, clear of the window
-  const ex = x + hingeSide * (w / 2), hz = zb + F / 2 + 0.008;
+  // T-hinges on the hinge edge (top, middle, bottom): an upright plate at the edge and a short strap that
+  // tapers to a point across the door
+  const ex = x + hingeSide * (w / 2), hz = zb + F / 2 + 0.006, dir = -hingeSide;   // strap runs toward the door's centre
+  const strapLen = Math.min(0.72, w * 0.3), plateW = 0.11, plateH = 0.4;
+  const strap = new THREE.Shape([new THREE.Vector2(0, -0.07), new THREE.Vector2(strapLen * 0.35, -0.045), new THREE.Vector2(strapLen, -0.012),
+    new THREE.Vector2(strapLen, 0.012), new THREE.Vector2(strapLen * 0.35, 0.045), new THREE.Vector2(0, 0.07)]);
+  const strapGeo = new THREE.ExtrudeGeometry(strap, { depth: 0.02, bevelEnabled: false });
   for (const y of [h - topR - winH - underWin / 2, yMid, botR / 2 + 0.05]) {
-    box(0.29, 0.33, 0.02, M.metal, ex - hingeSide * 0.13, y, hz, g);            // hinge leaf (3.5" x 4")
-    const k = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.34, 10), M.metal);
-    k.position.set(ex - hingeSide * 0.005, y, hz + 0.015); g.add(k);              // knuckle
-    for (const dy of [-0.1, 0.1]) { const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.012, 8), M.steel); sc.rotation.x = Math.PI / 2; sc.position.set(ex - hingeSide * 0.17, y + dy, hz + 0.012); g.add(sc); }
+    box(plateW, plateH, 0.022, M.metal, ex + dir * plateW / 2, y, hz + 0.011, g);   // upright plate at the edge
+    const st = new THREE.Mesh(strapGeo, M.metal); st.castShadow = true;
+    st.position.set(ex + dir * (plateW - 0.01), y, hz); st.scale.x = dir; g.add(st);
+    for (const d of [0.2, 0.42]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.012, 8), M.steel); b.rotation.x = Math.PI / 2; b.position.set(ex + dir * (plateW + d), y, hz + 0.024); g.add(b); }
+    for (const dy of [-0.13, 0.13]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.012, 8), M.steel); b.rotation.x = Math.PI / 2; b.position.set(ex + dir * plateW / 2, y + dy, hz + 0.026); g.add(b); }
   }
 }
 function panelDoorLeaf(g, w, h, M, x, z) {
