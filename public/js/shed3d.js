@@ -405,9 +405,9 @@ function buildKind(kind, w, h, d, M, ctx = {}) {
       const lw = w / 2 - 0.025;
       carriageLeaf(g, lw, h - 0.02, M, -w / 4, zOut - 0.06, -1);
       carriageLeaf(g, lw, h - 0.02, M, w / 4, zOut - 0.06, 1);
-      box(0.07, h - 0.06, 0.03, M.door, 0.035, h / 2, zOut + 0.02, g);           // astragal: right door laps over the meeting edge
-      // knob on the LEFT door, on its stile next to the meeting edge
-      const kx = -0.2;
+      box(0.07, h - 0.06, 0.03, M.door, -0.035, h / 2, zOut + 0.02, g);          // astragal on the left (inactive) door over the meeting edge
+      // knob on the RIGHT door, on its stile next to the meeting edge
+      const kx = 0.2;
       const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), M.metal); k.position.set(kx, h * 0.47, zOut + 0.1); g.add(k);
       box(0.12, 0.22, 0.03, M.metal, kx, h * 0.47, zOut + 0.04, g);
       break;

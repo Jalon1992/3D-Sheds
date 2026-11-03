@@ -135,7 +135,7 @@ export function elevationSVG(catalog, config, wall, opts = {}) {
           }
         } else if (kind === 'door_glass') o.push(`<rect x="${x0 + wpx * 0.18}" y="${y0 + hpx * 0.08}" width="${wpx * 0.64}" height="${hpx * 0.4}" fill="#dfe8ee" stroke="#1d2624" stroke-opacity=".6"/>`);
         else { o.push(`<rect x="${x0 + wpx * 0.15}" y="${y0 + hpx * 0.08}" width="${wpx * 0.7}" height="${hpx * 0.36}" fill="none" stroke="#1d2624" stroke-opacity=".5"/><rect x="${x0 + wpx * 0.15}" y="${y0 + hpx * 0.54}" width="${wpx * 0.7}" height="${hpx * 0.36}" fill="none" stroke="#1d2624" stroke-opacity=".5"/>`); }
-        if (kind !== 'door_rollup') o.push(`<circle cx="${kind === 'door_double' || kind === 'door_french' || kind === 'door_carriage_double' ? (x0 + x1) / 2 + 7 : x1 - 9}" cy="${y0 + hpx * 0.53}" r="3" fill="#1d2624"/>`);
+        if (kind !== 'door_rollup') o.push(`<circle cx="${kind === 'door_carriage_double' ? (x0 + x1) / 2 + 9 : kind === 'door_double' || kind === 'door_french' ? (x0 + x1) / 2 + 7 : x1 - 9}" cy="${y0 + hpx * 0.53}" r="3" fill="#1d2624"/>`);
       } else if (kind === 'vent') {
         o.push(`<rect x="${x0}" y="${y0}" width="${wpx}" height="${hpx}" fill="#ffffff" stroke="#1d2624" stroke-width="1.2"/>`);
         for (let k = 1; k < 5; k++) o.push(`<line x1="${x0}" y1="${y0 + hpx * k / 5}" x2="${x1}" y2="${y0 + hpx * k / 5}" stroke="#1d2624" stroke-opacity=".6"/>`);
