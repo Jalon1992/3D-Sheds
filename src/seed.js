@@ -17,7 +17,7 @@ export function seed() {
   if (getSettings().company_name === undefined) {
     setSettings({
       company_name: 'Your Shed Co.', headline: 'Design your shed in 3D', logo_url: '', brand_color: '#2f6b4f',
-      currency_symbol: '$', tax_rate: 0, tax_delivery: false, delivery_fee: 0, show_prices: true, require_phone: true,
+      currency_symbol: '$', tax_rate: 0, tax_delivery: false, delivery_fee: 0, show_prices: true, customer_window_height: true, require_phone: true,
       phone: '', website: '', privacy_url: '',
       success_message: 'Thanks! Your quote is on its way. A member of our team will reach out shortly.',
       consent_text: 'I agree to receive calls and text messages about my quote. Msg & data rates may apply. Reply STOP to opt out.',
@@ -41,6 +41,7 @@ export function seed() {
     ],
     zip_tiers: [],
   });
+  if (getSettings().customer_window_height === undefined) setSettings({ customer_window_height: true });
   if (getSettings().quote_terms === undefined) setSettings({ customer_pdf: true, quote_terms: 'Prices valid for 30 days. Delivery subject to level site and clear access. Final price confirmed at order.' });
   if (getSettings().color_groups === undefined) setSettings({ color_groups: { siding: true, trim: true, roof: true, door: true, window: true } });
   if (getSettings().downgrade_credit === undefined) setSettings({ downgrade_credit: true, remove_credit: true });
@@ -75,10 +76,10 @@ export function seed() {
   const O = {};
   const opt = (key, o) => { O[key] = ins('options', o); };
   let s = 0;
-  opt('door36', { name: '36" Single Door', category: 'doors', kind: 'door_single', placement: 'opening', swap_group: 'door', width: 3, height: 6.67, price: 275, sort: s++, description: 'Pre-hung wood door with lock set.' });
+  opt('door36', { name: '36" Single Door', category: 'doors', kind: 'door_panel', placement: 'opening', swap_group: 'door', width: 3, height: 6.67, price: 275, sort: s++, description: 'Pre-hung wood door with lock set.' });
   opt('door9lite', { name: '9-Lite Glass Door', category: 'doors', kind: 'door_glass', placement: 'opening', swap_group: 'door', width: 3, height: 6.67, price: 595, sort: s++, description: 'Residential steel door with 9-lite glass.' });
   opt('dbl4', { name: "4' Double Doors", category: 'doors', kind: 'door_double', placement: 'opening', swap_group: 'door', width: 4, height: 6.33, price: 425, sort: s++ });
-  opt('dbl6', { name: "6' Double Doors", category: 'doors', kind: 'door_double', placement: 'opening', swap_group: 'door', width: 6, height: 6.33, price: 625, sort: s++ });
+  opt('dbl6', { name: "6' Double Doors", category: 'doors', kind: 'door_panel_double', placement: 'opening', swap_group: 'door', width: 6, height: 6.33, price: 625, sort: s++ });
   opt('french', { name: 'French Doors (5\')', category: 'doors', kind: 'door_french', placement: 'opening', swap_group: 'door', width: 5, height: 6.67, price: 1150, sort: s++ });
   opt('roll6', { name: "6' x 6' Roll-Up Door", category: 'doors', kind: 'door_rollup', placement: 'opening', swap_group: 'door', width: 6, height: 6, price: 895, sort: s++ });
   opt('roll8', { name: "8' x 7' Roll-Up Door", category: 'doors', kind: 'door_rollup', placement: 'opening', swap_group: 'door', width: 8, height: 7, price: 1295, sort: s++ });
@@ -113,6 +114,9 @@ export function seed() {
   // Carriage-house doors (built-in models: body takes the door color, window grids take the trim color)
   opt('carriage72', { name: '72" Carriage House Double Doors', category: 'doors', kind: 'door_carriage_double', placement: 'opening', swap_group: 'door', width: 6, height: 71.5 / 12, price: 895, sort: 7, description: 'Double doors with 5-lite transom windows, raised panels and black strap hinges.' });
   opt('carriage36', { name: '36" Single Carriage House Door', category: 'doors', kind: 'door_carriage', placement: 'opening', swap_group: 'door', width: 3, height: 71.5 / 12, price: 450, sort: 8, description: 'Single door with 5-lite transom window, raised panels and black strap hinges.' });
+  opt('shelf2', { name: 'Double Shelves (20" deep)', description: 'Two shelf levels, 20" deep. Pick the length that fits your wall.', category: 'interior', kind: 'shelf_double', placement: 'wall_interior', width: 6, height: 2.5, depth: 20 / 12, elevation: 2.5, price: 24, price_unit: 'per_ft_item', length_choices: '4, 6, 8, 10, 12', sort: 3 });
+  // A window with separate top & bottom grids (single-hung look)
+  opt('win23sh', { name: "2' x 3' Window (top & bottom grids)", category: 'windows', kind: 'window', placement: 'opening', swap_group: 'window', gable_mode: '', width: 2, height: 3, elevation: 3.5, grid_top: '2x2', grid_bottom: '2x2', price: 175, sort: 5 });
   // What comes in the Electrical Package, and where each part goes (wall + feet from the wall centre, seen from outside)
   run('UPDATE options SET package_items = ? WHERE id = ?', JSON.stringify([
     { option_id: O.breaker, qty: 1, wall: 'back', offset: -2 },

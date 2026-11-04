@@ -139,7 +139,7 @@ export function resolvePlacement(geo, opt, item) {
   let elev = baseElev;
   if (opt.placement === 'opening' || opt.placement === 'wall_exterior' || opt.placement === 'wall_interior') {
     const top = Math.min(geo.topAt(item.wall, offset - w / 2 - pad.side), geo.topAt(item.wall, offset + w / 2 + pad.side));
-    const maxTop = top - (opt.placement === 'opening' ? pad.head + 0.15 : 0.15);
+    const maxTop = top - (opt.placement === 'opening' ? pad.head + 0.08 : 0.15);
     if (inGable(geo, opt, item)) {
       // centred in the gable: above the top of the wall, head trim clear of the rake board
       const lo = geo.H + 0.15 + pad.sill, hi = maxTop - 0.15;

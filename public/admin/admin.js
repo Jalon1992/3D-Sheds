@@ -22,7 +22,7 @@ const PLACEMENTS = [
   ['wall_interior', 'On inside of wall (shelves, benches, outlets)'], ['ceiling', 'Ceiling (lights)'], ['loft', 'Loft (runs full wall length)'],
   ['ground', 'Ground in front of a wall (ramps)'], ['roof', 'On the roof ridge (cupola)'], ['none', 'No 3D placement — line item / toggle'],
 ];
-const PRICE_UNITS = [['each', 'Each'], ['per_ft_wall', 'Per ft of the wall it is on'], ['per_ft_width', 'Per ft of shed width'], ['per_ft_depth', 'Per ft of shed depth'], ['per_sqft', 'Per sq ft of floor'], ['per_ft_perimeter', 'Per ft of perimeter']];
+const PRICE_UNITS = [['each', 'Each'], ['per_ft_wall', 'Per ft of the wall it is on'], ['per_ft_width', 'Per ft of shed width'], ['per_ft_depth', 'Per ft of shed depth'], ['per_sqft', 'Per sq ft of floor'], ['per_ft_perimeter', 'Per ft of perimeter'], ['per_ft_item', 'Per ft of its length (customer-picked lengths)']];
 const STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'];
 const CONFIG_URL = window.__configuratorUrl || '/';
 const planUrl = id => (window.__planUrl ? window.__planUrl(id) : `/api/v1/quotes/${id}/floorplan.svg`);
@@ -264,7 +264,7 @@ async function quoteDetail(id, refresh) {
         ${canEditQuotes() ? '<button class="btn primary sm" id="qQuotePdf">Quote PDF (prices + drawings)</button>' : ''}
         <button class="btn ${canEditQuotes() ? 'ghost' : 'primary'} sm" id="qDraw">Drawings PDF (no prices)</button></div>
       <div class="plan-prev"><img src="${planUrl(x.id)}" alt="Floor plan"></div>
-      <h3 style="margin:18px 0 6px">Line items</h3><div class="lines">${x.pricing_lines.map(l => `<div class="ln"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall ? `<small>${esc(l.wall)}</small>` : ''}</div><div>${fmt(l.amount)}</div></div>`).join('')}
+      <h3 style="margin:18px 0 6px">Line items</h3><div class="lines">${x.pricing_lines.map(l => `<div class="ln"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall ? `<small>${esc(l.wall)}${l.detail ? ' · ' + esc(l.detail) : ''}</small>` : l.detail ? `<small>${esc(l.detail)}</small>` : ''}</div><div>${fmt(l.amount)}</div></div>`).join('')}
       ${x.pricing.delivery ? `<div class="ln"><div>Delivery</div><div>${fmt(x.pricing.delivery)}</div></div>` : ''}${x.pricing.tax ? `<div class="ln"><div>Tax</div><div>${fmt(x.pricing.tax)}</div></div>` : ''}
       <div class="ln tot"><div>Total</div><div>${fmt(x.pricing.total)}</div></div></div>
     </div><div>
@@ -582,10 +582,14 @@ const OPTION_FIELDS = () => [
   { key: 'depth', label: 'Depth (ft)', type: 'number', step: '0.05' },
   { key: 'elevation', label: 'Standard height — bottom above floor (ft)', type: 'number', step: '0.0208', help: 'Where it sits by default. Doors = 0. Windows: bottom of the window (top shown below). Use -1 to auto-place high in the gable (vents).' },
   { type: 'html', html: '<div class="full roofinfo" id="elevInfo"></div>' },
+  { type: 'html', html: '<div class="section-t full">Window grids (windows only)</div>' },
+  { key: 'grid_top', label: 'Top half grid (columns × rows)', type: 'select', options: [['', 'Standard grid'], ['none', 'No grid (clear glass)'], ['1x2', '1 × 2'], ['2x1', '2 × 1'], ['2x2', '2 × 2'], ['3x1', '3 × 1'], ['3x2', '3 × 2'], ['2x3', '2 × 3'], ['3x3', '3 × 3'], ['4x2', '4 × 2']], help: 'Set the top and/or bottom to give the window two sashes, each with its own grid (meeting rail across the middle). Leave both on "Standard grid" for the regular one-piece grid.' },
+  { key: 'grid_bottom', label: 'Bottom half grid (columns × rows)', type: 'select', options: [['', 'Standard grid'], ['none', 'No grid (clear glass)'], ['1x2', '1 × 2'], ['2x1', '2 × 1'], ['2x2', '2 × 2'], ['3x1', '3 × 1'], ['3x2', '3 × 2'], ['2x3', '2 × 3'], ['3x3', '3 × 3'], ['4x2', '4 × 2']] },
   { key: 'gable_mode', label: 'Can it go up in the gable?', type: 'select', full: true, options: [['', 'No — walls only'], ['allow', 'Yes — customer can put it on the wall or up in the gable'], ['only', 'Gable only (e.g. a gable/attic window)']], help: 'Windows & vents. In the gable it is centred between the top of the wall and the roof line, if it fits.' },
   { key: 'price', label: 'Price ($)', type: 'number', step: '0.01' },
   { key: 'price_unit', label: 'Priced', type: 'select', options: PRICE_UNITS },
   { key: 'max_qty', label: 'Max per shed', type: 'number' },
+  { key: 'length_choices', label: 'Lengths customers can pick (ft)', ph: 'e.g. 4, 6, 8, 10, 12', help: 'Optional. Customers pick one of these lengths on the model (shelves, workbenches…). Pair with "Priced: per ft of its length". Width above = the starting length.' },
   { key: 'package_only', label: 'Only sold as part of a package (not listed on its own)', type: 'checkbox', full: true },
   { key: 'sort', label: 'Sort order', type: 'number' },
   { key: 'image_url', label: 'Thumbnail image (optional)', type: 'upload', accept: 'image/*' },
@@ -596,7 +600,7 @@ async function options() {
   await loadCatalog();
   const cat = new URLSearchParams(location.hash.split('?')[1] || '').get('cat') || '';
   const list = catalog.options.filter(o => !cat || o.category === cat);
-  const unit = o => ({ per_sqft: '/sq ft', per_ft_wall: '/ft', per_ft_width: '/ft', per_ft_depth: '/ft', per_ft_perimeter: '/ft' }[o.price_unit] || '');
+  const unit = o => ({ per_ft_item: '/ft', per_sqft: '/sq ft', per_ft_wall: '/ft', per_ft_width: '/ft', per_ft_depth: '/ft', per_ft_perimeter: '/ft' }[o.price_unit] || '');
   $('#main').innerHTML = head('Options & 3D models', 'Doors, windows, shelves, wiring and upgrades. Each can use a built-in 3D model or your own .glb.', `<button class="btn primary" id="addOpt">+ New option</button>`) + `
     <div class="tabs">${[['', 'All'], ...CATEGORIES].map(([k, l]) => `<button data-cat="${k}" class="${k === cat ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="card tbl-wrap"><table class="tbl"><tr><th>Option</th><th>Category</th><th>Placement</th><th>3D model</th><th>Size (ft)</th><th class="num">Price</th><th>Status</th><th></th></tr>
@@ -906,6 +910,7 @@ const SETTINGS_FIELDS = [
   { key: 'logo_url', label: 'Logo', type: 'upload', accept: 'image/*' }, { key: 'brand_color', label: 'Brand color', type: 'color' },
   { key: 'phone', label: 'Phone (shown in header)' }, { key: 'website', label: 'Website' },
   { type: 'section', label: 'Pricing' },
+  { key: 'customer_window_height', label: 'Let customers raise or lower windows (height off the floor)', type: 'checkbox', full: true, help: 'On = clicking a window on the model shows up/down buttons (2" steps, kept under the roof line and clear of other items). Off = windows stay at the standard height set for each window type.' },
   { key: 'show_prices', label: 'Show prices to customers (customer-facing configurator)', type: 'checkbox', full: true, help: 'Off = customers see no prices anywhere: no totals, no option prices, and their PDF has no prices. Prices are not sent to their browser at all. The dealer-facing configurator, opened while signed in here (Open configurator), always shows prices.' }, { key: 'currency_symbol', label: 'Currency symbol' },
   { key: 'delivery_fee', label: 'Delivery fee ($)', type: 'number', step: '0.01' }, { key: 'tax_rate', label: 'Sales tax (%)', type: 'number', step: '0.001' },
   { key: 'tax_delivery', label: 'Charge tax on delivery', type: 'checkbox' },

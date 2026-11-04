@@ -1,7 +1,7 @@
 // Customer-facing configurator: Style → Size → Colors → Options → Quote.
 import { ShedScene } from './shed3d.js';
-import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList, optionAvailable, isPackage, placePackage } from './shared/pricing.js';
-import { shedGeometry, findSpot, canPlace, resolvePlacement, gableMode } from './shared/geometry.js';
+import { defaultConfig, priceConfig, money, WALLS, colorGroupEnabled, resolveTier, tierCatalog, findDealer, roofChoices, roofColorsFor, roofMaterialPrice, roofingList, optionAvailable, isPackage, placePackage, lengthChoices, windowHeightAdjustable, isWindow } from './shared/pricing.js';
+import { shedGeometry, findSpot, canPlace, resolvePlacement, gableMode, inGable } from './shared/geometry.js';
 import { floorPlanSVG } from './shared/floorplan.js';
 import { buildDrawingPackage } from './drawings.js';
 
@@ -45,6 +45,13 @@ const ICONS = {
   ramp: '<svg viewBox="0 0 32 32"><path d="M4 26h24V12z"/><path d="M10 22l2 4M16 18l3 8M22 15l3 11"/></svg>',
   cupola: '<svg viewBox="0 0 32 32"><path d="M16 2v5M8 15l8-8 8 8M10 15h12v13H10zM13 18h6v6h-6z"/></svg>',
   flowerbox: '<svg viewBox="0 0 32 32"><path d="M5 18h22l-2 9H7z"/><circle cx="10" cy="13" r="3"/><circle cx="17" cy="11" r="3"/><circle cx="23" cy="14" r="2.5"/></svg>',
+  door_panel: '<svg viewBox="0 0 32 32"><rect x="9" y="4" width="14" height="25"/><rect x="11.5" y="7" width="9" height="9"/><rect x="11.5" y="18" width="9" height="8"/><path d="M23 9h-3M23 16h-3M23 24h-3"/><circle cx="12" cy="17" r="1"/></svg>',
+  door_panel_double: '<svg viewBox="0 0 32 32"><rect x="4" y="5" width="24" height="23"/><path d="M16 5v23"/><rect x="6.5" y="8" width="7" height="8"/><rect x="18.5" y="8" width="7" height="8"/><rect x="6.5" y="18" width="7" height="8"/><rect x="18.5" y="18" width="7" height="8"/><circle cx="18" cy="17" r="1"/></svg>',
+  door_carriage: '<svg viewBox="0 0 32 32"><rect x="9" y="4" width="14" height="25"/><rect x="11" y="6" width="10" height="4"/><path d="M13 6v4M15 6v4M17 6v4M19 6v4"/><rect x="11.5" y="12" width="9" height="6"/><rect x="11.5" y="20" width="9" height="6"/><circle cx="20" cy="19" r="1"/></svg>',
+  door_carriage_double: '<svg viewBox="0 0 32 32"><rect x="4" y="5" width="24" height="23"/><path d="M16 5v23"/><rect x="6" y="7" width="8" height="4"/><rect x="18" y="7" width="8" height="4"/><rect x="6.5" y="13" width="7" height="6"/><rect x="18.5" y="13" width="7" height="6"/><rect x="6.5" y="21" width="7" height="5"/><rect x="18.5" y="21" width="7" height="5"/><circle cx="18" cy="19" r="1"/></svg>',
+  shelf_double: '<svg viewBox="0 0 32 32"><path d="M4 10h24M4 20h24M7 6v20M25 6v20M9 10l-2 3M23 10l2 3M9 20l-2 3M23 20l2 3"/></svg>',
+  breaker: '<svg viewBox="0 0 32 32"><rect x="9" y="4" width="14" height="24" rx="1"/><path d="M12 9h8M12 13h8M12 17h8M12 21h8"/></svg>',
+  switch: '<svg viewBox="0 0 32 32"><rect x="11" y="6" width="10" height="20" rx="2"/><rect x="14.5" y="11" width="3" height="10" rx="1"/></svg>',
   none: '<svg viewBox="0 0 32 32"><rect x="5" y="5" width="22" height="22" rx="5"/><path d="M10 16l4 4 8-8"/></svg>',
 };
 const iconFor = o => o.image_url ? `<img src="${esc(o.image_url)}" alt="">` : (ICONS[o.kind] || ICONS.none);
@@ -254,6 +261,34 @@ function moveToWall(uid, wall) {
   rebuild(); selectItem(uid); showWall(wall); renderPanel();
 }
 /** Make sure every item still fits after a style/size change; move or drop what doesn't. */
+const inchStr = ft => { const t = Math.round(ft * 12); return `${t}"`; };
+/** Customer moves a window up/down in 2" steps (when the admin allows it). */
+function setElev(uid, dir) {
+  const it = state.config.items.find(i => i.uid === uid); if (!it) return; const o = optById[it.option_id];
+  const g = geo(), cur = resolvePlacement(g, o, it).elev;
+  const next = Math.round((cur + dir * 2 / 12) * 12) / 12;
+  const cand = { ...it, elev: next };
+  const p = resolvePlacement(g, o, cand);
+  if (next < 1) return toast('That\'s as low as it goes');
+  if (Math.abs(p.elev - next) > 0.01) return toast('That\'s as high as it fits under the roof line');
+  if (!canPlace(g, optById, state.config.items, o, cand, uid)) return notice('No room there', `Moving the ${o.name} ${dir > 0 ? 'up' : 'down'} would overlap something else on the ${it.wall} wall.\n\nMove it sideways or move the other item first.`);
+  it.elev = next; rebuild(); selectItem(uid); renderPanelIfOptions();
+}
+function resetElev(uid) { const it = state.config.items.find(i => i.uid === uid); if (!it) return; const o = optById[it.option_id];
+  const cand = { ...it }; delete cand.elev;
+  if (!canPlace(geo(), optById, state.config.items, o, cand, uid)) return notice('No room there', `The standard height would overlap something else on the ${it.wall} wall.`);
+  delete it.elev; rebuild(); selectItem(uid); renderPanelIfOptions(); }
+/** Customer picks a length (e.g. double shelves). */
+function setLength(uid, len) {
+  const it = state.config.items.find(i => i.uid === uid); if (!it) return; const o = optById[it.option_id];
+  const cand = { ...it, w: len };
+  if (!canPlace(geo(), optById, state.config.items, o, cand, uid)) {
+    const spot = findSpot(geo(), optById, state.config.items, o, it.wall, it.offset, uid, { w: len, h: it.h, elev: it.elev });
+    if (!spot || spot.wall !== it.wall) return notice(`No room for ${len}' ${o.name}`, `A ${len}' length doesn't fit on the ${it.wall} wall — there isn't an open space that long.\n\nPick a shorter length, move it to another wall, or move something out of the way.`);
+    Object.assign(cand, spot);
+  }
+  Object.assign(it, cand); rebuild(); selectItem(uid); renderPanelIfOptions();
+}
 function setGable(uid, on) {
   const it = state.config.items.find(i => i.uid === uid); if (!it) return; const o = optById[it.option_id];
   if (on && (!WALLS.includes(it.wall) || !geo().isGable(it.wall) || gableMode(o) !== 'allow')) return;
@@ -337,6 +372,7 @@ function selectItem(uid) {
   state.selected = uid; scene.select(uid);
   const card = $('#itemcard');
   const it = uid && state.config.items.find(i => i.uid === uid);
+  document.body.classList.toggle('card-open', !!it);
   if (!it) { card.hidden = true; return; }
   const o = optById[it.option_id];
   const pk = pkgOf(it);
@@ -367,6 +403,19 @@ function selectItem(uid) {
     </div>` : ''}
     ${gableMode(o) === 'allow' && geo().isGable(it.wall) ? `<div class="ic-label">Height</div><div class="walls"><button data-gable="0" class="${it.gable ? '' : 'on'}">On the wall</button><button data-gable="1" class="${it.gable ? 'on' : ''}">Up in the gable</button></div>` : ''}
     ${gableMode(o) === 'only' ? `<div class="ic-meta" style="margin-top:8px">Sits up in the gable end.</div>` : ''}
+    ${(() => {
+      if (!(isWindow(o) && windowHeightAdjustable(state.catalog) && WALLS.includes(it.wall) && !inGable(geo(), o, it) && !pk)) return '';
+      const g = geo(), pl = resolvePlacement(g, o, it);
+      const can = d => { const e = Math.round((pl.elev + d * 2 / 12) * 12) / 12; if (e < 1) return false; const c = { ...it, elev: e }; return Math.abs(resolvePlacement(g, o, c).elev - e) < 0.01 && canPlace(g, optById, state.config.items, o, c, it.uid); };
+      return `<div class="ic-label">Height off floor</div><div class="ic-row hgt"><div class="mv"><button data-elev="-1" aria-label="Lower 2 inches" ${can(-1) ? '' : 'disabled title="As low as it goes here"'}><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><button data-elev="1" aria-label="Raise 2 inches" ${can(1) ? '' : 'disabled title="As high as it fits under the roof line"'}><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button></div>
+        <span class="ic-meta">Bottom <b>${inchStr(pl.elev)}</b> · top <b>${inchStr(pl.elev + pl.h)}</b>${it.elev !== undefined ? ' · <button class="link-sm" data-elevreset="1">standard</button>' : ''}</span></div>`;
+    })()}
+    ${(() => {
+      const lc = lengthChoices(o); if (!lc.length || !WALLS.includes(it.wall)) return '';
+      const cur = Number(it.w) > 0 ? Number(it.w) : Number(o.width);
+      const L = geo().wallLen(it.wall);
+      return `<div class="ic-label">Length</div><div class="walls">${lc.map(v => `<button data-len="${v}" class="${Math.abs(v - cur) < 0.01 ? 'on' : ''}" ${v > L - 0.8 ? 'disabled title="Longer than this wall"' : ''}>${v}'</button>`).join('')}</div>`;
+    })()}
     <div class="ic-foot">${pk ? '<span class="ic-meta">Drag it or use the arrows to move it</span>' : `<button class="link-danger" data-act="remove">Remove${removedCredit && showPrices() ? ` (${fmt(removedCredit)})` : ''}</button>`}
       <button class="btn primary sm" data-act="close">Done</button></div>`;
   card.hidden = false;
@@ -380,6 +429,9 @@ $('#itemcard').addEventListener('click', e => {
   else if (b.dataset.wall) moveToWall(uid, b.dataset.wall);
   else if (b.dataset.move) moveItem(uid, Number(b.dataset.move));
   else if (b.dataset.gable !== undefined) setGable(uid, b.dataset.gable === '1');
+  else if (b.dataset.elev) setElev(uid, Number(b.dataset.elev));
+  else if (b.dataset.elevreset) resetElev(uid);
+  else if (b.dataset.len) setLength(uid, Number(b.dataset.len));
 });
 
 // ---------------------------------------------------------------------------
@@ -491,7 +543,7 @@ function renderOptions() {
     for (const o of list) {
       const c = counts[o.id] || 0;
       const pr = (() => { try { return priceConfig(state.catalog, { ...state.config, items: [{ uid: 'p', option_id: o.id, wall: 'back' }] }).lines.find(l => l.type === 'option')?.amount ?? 0; } catch { return o.price; } })();
-      const unit = { per_sqft: ` (${fmt(o.price)}/sq ft)`, per_ft_wall: ` (${fmt(o.price)}/ft)`, per_ft_width: ` (${fmt(o.price)}/ft)` }[o.price_unit] || '';
+      const unit = { per_ft_item: ` (${fmt(o.price)}/ft)`, per_sqft: ` (${fmt(o.price)}/sq ft)`, per_ft_wall: ` (${fmt(o.price)}/ft)`, per_ft_width: ` (${fmt(o.price)}/ft)` }[o.price_unit] || '';
       const incl = isPackage(o) ? o.package_items.map(pi => { const x = optById[pi.option_id]; return x ? `${Number(pi.qty) > 1 ? pi.qty + ' × ' : ''}${x.name}` : ''; }).filter(Boolean).join(' · ') : '';
       html += `<div class="opt"><div class="ico">${iconFor(o)}</div><div class="meta"><b>${esc(o.name)}</b>${o.description ? `<small>${esc(o.description)}</small>` : ''}${incl ? `<small class="incl">Includes: ${esc(incl)}</small>` : ''}${showPrices() ? `<span class="p">${fmt(pr)}${unit}</span>` : ''}</div>`;
       if (o.placement === 'none') html += `<button class="tog ${c ? 'on' : ''}" data-toggle="${o.id}" aria-label="Toggle ${esc(o.name)}"></button>`;
@@ -508,7 +560,7 @@ function renderQuote() {
   const lines = p.lines.filter(l => l.type !== 'color' || l.amount);
   const st = S();
   return `<h2>Your quote</h2><p class="sub">Review your shed and tell us where to send your quote.</p>
-  <div class="lines">${lines.map(l => `<div class="line"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall && WALLS.includes(l.wall) ? `<small>${esc(l.wall)} wall</small>` : ''}</div><div class="${l.amount < 0 ? 'neg' : ''}">${sp ? (l.note === 'Standard' ? 'Included' : fmt(l.amount)) : ''}</div></div>`).join('')}
+  <div class="lines">${lines.map(l => `<div class="line"><div>${esc(l.label)}${l.note ? `<small>${esc(l.note)}</small>` : ''}${l.wall && WALLS.includes(l.wall) ? `<small>${esc(l.wall)} wall${l.detail ? ' · ' + esc(l.detail) : ''}</small>` : l.detail ? `<small>${esc(l.detail)}</small>` : ''}</div><div class="${l.amount < 0 ? 'neg' : ''}">${sp ? (l.note === 'Standard' ? 'Included' : fmt(l.amount)) : ''}</div></div>`).join('')}
   ${sp && p.delivery ? `<div class="line"><div>Delivery</div><div>${fmt(p.delivery)}</div></div>` : ''}
   ${sp && p.tax ? `<div class="line"><div>Tax (${p.tax_rate}%)</div><div>${fmt(p.tax)}</div></div>` : ''}
   ${sp ? `<div class="line tot"><div>Total</div><div>${fmt(p.total)}</div></div>` : ''}
@@ -753,7 +805,7 @@ async function boot() {
   if (savedLoc.zip && !state.config.zip && /^\d{5}$/.test(savedLoc.zip)) state.config.zip = savedLoc.zip;
   applyTier();
   rebuild();
-  if (params.has('debug')) window.__shed = { scene, state, optById, addOption, removeItem, swapItem, moveItem, moveToWall, setGable, dragItem, fitItems, pricing, notice, go };
+  if (params.has('debug')) window.__shed = { scene, state, optById, addOption, removeItem, swapItem, moveItem, moveToWall, setGable, setElev, setLength, dragItem, fitItems, pricing, notice, go };
   renderSteps(); renderPanel();
   if (state.jumpToSize) setTimeout(() => $('#sizeHead')?.scrollIntoView({ block: 'start' }), 50);
   setTimeout(() => $('#loading').classList.add('gone'), 150);
