@@ -304,6 +304,14 @@ demo/                        Single-file demo build
 render.yaml, Dockerfile      Deployment
 ```
 
+## Updating an existing install
+
+Pushing a new version keeps your catalog, prices and quotes. The first start after an update also brings an older
+catalog up to date once: the stock **6' Double Doors** switch to the plain panel look (no X braces), and the
+**36" Standard Door** (right half of the 6' double), **36" Carriage House Door** (right half of the 72"),
+**72" Carriage House Double Doors** and **Double Shelves** are added if they're missing. Options you renamed or
+rebuilt are left alone. The browser demo does the same for a browser that opened an older demo.
+
 ## Security
 
 - **Logins:** scrypt-hashed passwords; HttpOnly + SameSite session cookies (Secure over HTTPS). Changing a password, or deleting a user, signs that login out everywhere. Login is rate-limited per IP (10/min) and per account (20 failures locks it for 15 min). The dashboard warns while the default `changeme123` password is still in use.

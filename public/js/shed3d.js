@@ -386,7 +386,7 @@ function windowUnit(g, w, h, M, opts = {}) {
 }
 
 export const BUILTIN_KINDS = {
-  breaker: 'Breaker box (sub-panel)', switch: 'Light switch', door_single: 'Single door', door_carriage: 'Carriage-house door (single)', door_panel: 'Panel door (single, no window)', door_panel_double: 'Panel double doors (no windows)', door_carriage_double: 'Carriage-house double doors', door_glass: 'Glass/lite door', door_double: 'Double barn doors', door_french: 'French doors',
+  breaker: 'Breaker box (sub-panel)', switch: 'Light switch', door_single: 'Single door', door_carriage: 'Carriage-house door (single, hinged left)', door_carriage_right: 'Carriage-house door (single, right half of the 72", hinged right)', door_panel: 'Standard door (single, right half of the 6\' double, hinged right)', door_panel_double: 'Panel double doors (no windows)', door_carriage_double: 'Carriage-house double doors', door_glass: 'Glass/lite door', door_double: 'Double barn doors', door_french: 'French doors',
   door_rollup: 'Roll-up door', window: 'Window', window_shutters: 'Window with shutters', window_transom: 'Transom window',
   vent: 'Gable vent', flowerbox: 'Flower box', ext_light: 'Exterior light', shelf: 'Shelf', shelf_double: 'Double shelves (two levels)', workbench: 'Workbench',
   loft: 'Loft', light: 'Ceiling light', outlet: 'Outlet', ramp: 'Ramp', cupola: 'Cupola', box: 'Generic box', none: 'No model (line item only)',
@@ -451,11 +451,14 @@ function buildKind(kind, w, h, d, M, ctx = {}) {
       box(0.12, 0.22, 0.03, M.metal, 0.2, h * 0.47, zOut + 0.04, g);
       break;
     }
-    case 'door_panel': { // 36" single door = the right half of the 6' double: hinges on the right, knob on the left
+    case 'door_panel':            // 36" standard door = the RIGHT half of the 6' double doors
+    case 'door_carriage_right': { // 36" carriage-house door = the RIGHT half of the 72" carriage doors
+      // hinges on the right edge, knob on the left stile exactly where it sits on the double door's right leaf
       casing(g, w, h, M, zOut);
-      carriageLeaf(g, w - 0.04, h - 0.02, M, 0, zOut - 0.06, 1, { window: false });
-      const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), M.metal); k.position.set(-w / 2 + 0.42, h * 0.47, zOut + 0.08); g.add(k);
-      box(0.12, 0.22, 0.03, M.metal, -w / 2 + 0.42, h * 0.47, zOut + 0.02, g);
+      carriageLeaf(g, w - 0.04, h - 0.02, M, 0, zOut - 0.06, 1, { window: kind === 'door_carriage_right' });
+      const kx = -w / 2 + 0.2;
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), M.metal); k.position.set(kx, h * 0.47, zOut + 0.1); g.add(k);
+      box(0.12, 0.22, 0.03, M.metal, kx, h * 0.47, zOut + 0.04, g);
       break;
     }
     case 'door_double': {

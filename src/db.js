@@ -124,6 +124,7 @@ try {
     db.prepare("INSERT INTO settings (key, value) VALUES ('migr_flat_window_trim', 'true')").run();
   }
 } catch { /* settings table not ready */ }
+// (catalog upgrades for older databases - new doors / shelves - live in seed.js upgradeCatalog())
 
 // ---- JSON column helpers -----------------------------------------------------
 export const JSON_COLS = new Set(['standard_options', 'default_colors', 'roof_choices', 'available_options', 'package_items', 'roofing', 'price_tiers', 'dealers', 'zip_tiers', 'events', 'headers', 'config', 'pricing', 'utm']);

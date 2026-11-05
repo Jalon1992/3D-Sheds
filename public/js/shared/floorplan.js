@@ -81,7 +81,7 @@ export function floorPlanSVG(catalog, config, meta = {}) {
           out.push(`<line x1="${-w / 2}" y1="0" x2="${w / 2}" y2="0" stroke="#fff" stroke-width="${T + 2}"/>`);
           for (let k = 0; k < leaves; k++) {
             // swing inward (local -y)
-            const hinge = leaves === 2 ? (k === 0 ? -w / 2 : w / 2) : (kind === 'door_panel' ? w / 2 : -w / 2);
+            const hinge = leaves === 2 ? (k === 0 ? -w / 2 : w / 2) : (kind === 'door_panel' || kind === 'door_carriage_right' ? w / 2 : -w / 2);
             const dir = hinge < 0 ? 1 : -1;
             out.push(`<line x1="${hinge}" y1="${-T / 2}" x2="${hinge}" y2="${-T / 2 - lw}" stroke="#1d2624" stroke-width="3"/>`);
             out.push(`<path d="M ${hinge} ${-T / 2 - lw} A ${lw} ${lw} 0 0 ${dir > 0 ? 1 : 0} ${hinge + dir * lw} ${-T / 2}" fill="none" stroke="#1d2624" stroke-width="1.2" stroke-dasharray="4 3"/>`);

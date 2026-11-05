@@ -48,6 +48,7 @@ const ICONS = {
   door_panel: '<svg viewBox="0 0 32 32"><rect x="9" y="4" width="14" height="25"/><rect x="11.5" y="7" width="9" height="9"/><rect x="11.5" y="18" width="9" height="8"/><path d="M23 9h-3M23 16h-3M23 24h-3"/><circle cx="12" cy="17" r="1"/></svg>',
   door_panel_double: '<svg viewBox="0 0 32 32"><rect x="4" y="5" width="24" height="23"/><path d="M16 5v23"/><rect x="6.5" y="8" width="7" height="8"/><rect x="18.5" y="8" width="7" height="8"/><rect x="6.5" y="18" width="7" height="8"/><rect x="18.5" y="18" width="7" height="8"/><circle cx="18" cy="17" r="1"/></svg>',
   door_carriage: '<svg viewBox="0 0 32 32"><rect x="9" y="4" width="14" height="25"/><rect x="11" y="6" width="10" height="4"/><path d="M13 6v4M15 6v4M17 6v4M19 6v4"/><rect x="11.5" y="12" width="9" height="6"/><rect x="11.5" y="20" width="9" height="6"/><circle cx="20" cy="19" r="1"/></svg>',
+  door_carriage_right: '<svg viewBox="0 0 32 32"><rect x="9" y="4" width="14" height="25"/><rect x="11" y="6" width="10" height="4"/><path d="M13 6v4M15 6v4M17 6v4M19 6v4"/><rect x="11.5" y="12" width="9" height="6"/><rect x="11.5" y="20" width="9" height="6"/><circle cx="12" cy="19" r="1"/></svg>',
   door_carriage_double: '<svg viewBox="0 0 32 32"><rect x="4" y="5" width="24" height="23"/><path d="M16 5v23"/><rect x="6" y="7" width="8" height="4"/><rect x="18" y="7" width="8" height="4"/><rect x="6.5" y="13" width="7" height="6"/><rect x="18.5" y="13" width="7" height="6"/><rect x="6.5" y="21" width="7" height="5"/><rect x="18.5" y="21" width="7" height="5"/><circle cx="18" cy="19" r="1"/></svg>',
   shelf_double: '<svg viewBox="0 0 32 32"><path d="M4 10h24M4 20h24M7 6v20M25 6v20M9 10l-2 3M23 10l2 3M9 20l-2 3M23 20l2 3"/></svg>',
   breaker: '<svg viewBox="0 0 32 32"><rect x="9" y="4" width="14" height="24" rx="1"/><path d="M12 9h8M12 13h8M12 17h8M12 21h8"/></svg>',
@@ -153,7 +154,7 @@ function renderTotal() {
 function optDelta(o, it) {
   // price shown on swap tiles relative to the current slot
   const size = curSize();
-  const tmp = { ...state.config, items: [{ uid: 'x', option_id: o.id, wall: it?.wall, standard_of: it?.standard_of || null }] };
+  const tmp = { ...state.config, items: [{ uid: 'x', option_id: o.id, wall: it?.wall, standard_of: it?.standard_of || null, ...(it && it.option_id === o.id && Number(it.w) > 0 ? { w: it.w } : {}) }] };
   const p = priceConfig(state.catalog, tmp).lines.find(l => l.type === 'option');
   return p ? p.amount : 0;
 }
@@ -254,11 +255,22 @@ function moveToWall(uid, wall) {
   if (o.placement === 'loft' && !geo().isGable(wall)) return toast('Lofts go on an end wall');
   if (gableMode(o) === 'only' && !geo().isGable(wall)) return toast(`${o.name} only fits up in a gable end`);
   const wantGable = it.gable && geo().isGable(wall);
-  const spot = findSpot(geo(), optById, state.config.items.filter(i => i.uid !== uid), o, wall, 0, uid, { w: it.w, h: it.h, gable: wantGable });
+  let spot = findSpot(geo(), optById, state.config.items.filter(i => i.uid !== uid), o, wall, 0, uid, { w: it.w, h: it.h, gable: wantGable });
+  let shortened = null;
+  if ((!spot || spot.wall !== wall) && lengthChoices(o).length) {
+    // items sold by length (double shelves): use the longest length that has room on that wall
+    for (const len of [...lengthChoices(o)].sort((a, b) => b - a)) {
+      if (len >= (Number(it.w) || Number(o.width))) continue;
+      const s2 = findSpot(geo(), optById, state.config.items.filter(i => i.uid !== uid), o, wall, 0, uid, { w: len, h: it.h });
+      if (s2 && s2.wall === wall) { spot = s2; shortened = len; break; }
+    }
+  }
   if (!spot || spot.wall !== wall) return notice(`No room on the ${wall} wall`, `The ${o.name} doesn't fit on the ${wall} wall — there isn't an open space wide enough${o.placement === 'opening' ? ' (including its trim)' : ''}.\n\n${NO_ROOM_TIP}`);
   Object.assign(it, spot); if (!it.gable) delete it.gable;
+  if (shortened) it.w = shortened;
   if (['wall_interior', 'loft'].includes(o.placement) && !state.interior) setInterior(true);
   rebuild(); selectItem(uid); showWall(wall); renderPanel();
+  if (shortened) toast(`Shortened to ${shortened}' — the longest that fits on the ${wall} wall`);
 }
 /** Make sure every item still fits after a style/size change; move or drop what doesn't. */
 const inchStr = ft => { const t = Math.round(ft * 12); return `${t}"`; };
@@ -278,13 +290,26 @@ function resetElev(uid) { const it = state.config.items.find(i => i.uid === uid)
   const cand = { ...it }; delete cand.elev;
   if (!canPlace(geo(), optById, state.config.items, o, cand, uid)) return notice('No room there', `The standard height would overlap something else on the ${it.wall} wall.`);
   delete it.elev; rebuild(); selectItem(uid); renderPanelIfOptions(); }
+/** For each length choice: that length if it has room somewhere on the item's current wall, else null. */
+function lengthFits(it, o) {
+  const g = geo();
+  return lengthChoices(o).map(len => {
+    const cand = { ...it, w: len };
+    if (canPlace(g, optById, state.config.items, o, cand, it.uid)) return len;
+    const sp = findSpot(g, optById, state.config.items, o, it.wall, it.offset, it.uid, { w: len, h: it.h, elev: it.elev });
+    return sp && sp.wall === it.wall ? len : null;
+  });
+}
 /** Customer picks a length (e.g. double shelves). */
 function setLength(uid, len) {
   const it = state.config.items.find(i => i.uid === uid); if (!it) return; const o = optById[it.option_id];
   const cand = { ...it, w: len };
   if (!canPlace(geo(), optById, state.config.items, o, cand, uid)) {
     const spot = findSpot(geo(), optById, state.config.items, o, it.wall, it.offset, uid, { w: len, h: it.h, elev: it.elev });
-    if (!spot || spot.wall !== it.wall) return notice(`No room for ${len}' ${o.name}`, `A ${len}' length doesn't fit on the ${it.wall} wall — there isn't an open space that long.\n\nPick a shorter length, move it to another wall, or move something out of the way.`);
+    if (!spot || spot.wall !== it.wall) {
+      const fits = lengthFits(it, o).filter(Boolean); const best = fits.length ? Math.max(...fits) : null;
+      return notice(`No room for ${len}' ${o.name}`, `A ${len}' length doesn't fit on the ${it.wall} wall — there isn't an open space that long (doors and windows are in the way).\n\n${best ? `The longest that fits on this wall is ${best}'. ` : ''}Pick a shorter length, move it to another wall, or move something out of the way.`);
+    }
     Object.assign(cand, spot);
   }
   Object.assign(it, cand); rebuild(); selectItem(uid); renderPanelIfOptions();
@@ -414,7 +439,8 @@ function selectItem(uid) {
       const lc = lengthChoices(o); if (!lc.length || !WALLS.includes(it.wall)) return '';
       const cur = Number(it.w) > 0 ? Number(it.w) : Number(o.width);
       const L = geo().wallLen(it.wall);
-      return `<div class="ic-label">Length</div><div class="walls">${lc.map(v => `<button data-len="${v}" class="${Math.abs(v - cur) < 0.01 ? 'on' : ''}" ${v > L - 0.8 ? 'disabled title="Longer than this wall"' : ''}>${v}'</button>`).join('')}</div>`;
+      const fit = lengthFits(it, o);
+      return `<div class="ic-label">Length</div><div class="walls">${lc.map((v, i) => { const on = Math.abs(v - cur) < 0.01; const why = v > L - 0.8 ? 'Longer than this wall' : !fit[i] && !on ? 'No open space this long on this wall' : ''; return `<button data-len="${v}" class="${on ? 'on' : ''}" ${why ? `disabled title="${why}"` : ''}>${v}'</button>`; }).join('')}</div>${fit.some((f, i) => !f && lc[i] <= L - 0.8) ? '<div class="ic-meta" style="margin-top:6px">Greyed-out lengths are blocked by a door or window on this wall — try another wall.</div>' : ''}`;
     })()}
     <div class="ic-foot">${pk ? '<span class="ic-meta">Drag it or use the arrows to move it</span>' : `<button class="link-danger" data-act="remove">Remove${removedCredit && showPrices() ? ` (${fmt(removedCredit)})` : ''}</button>`}
       <button class="btn primary sm" data-act="close">Done</button></div>`;

@@ -14,9 +14,25 @@ const JSONISH = { styles: ['standard_options', 'default_colors', 'roof_choices',
 
 // ---- storage -----------------------------------------------------------------
 let db = null;
+const CATALOG_VERSION = 3;
 function load() {
-  try { const raw = localStorage.getItem(KEY); if (raw) return JSON.parse(raw); } catch { /* storage unavailable */ }
+  try { const raw = localStorage.getItem(KEY); if (raw) return upgrade(JSON.parse(raw)); } catch { /* storage unavailable */ }
   return fresh();
+}
+// A browser that opened an older demo keeps its saved catalog: bring the stock doors/shelves up to date
+// (new door models, the 36" right-half doors, double shelves) without losing the visitor's own edits or quotes.
+function upgrade(d) {
+  if ((d.catalogVersion || 0) >= CATALOG_VERSION) return d;
+  const OLD_KINDS = { door_double: 'door_panel_double', door_single: 'door_panel', door_carriage: 'door_carriage_right' };
+  for (const so of seed.catalog.options) {
+    const cur = d.options.find(o => o.id === so.id);
+    if (!cur) { if (!d.options.some(o => o.kind === so.kind && o.name === so.name)) d.options.push(structuredClone(so)); continue; }
+    if (cur.kind !== so.kind && OLD_KINDS[cur.kind] === so.kind) Object.assign(cur, { kind: so.kind, name: so.name, description: so.description, height: so.height });
+    for (const k of ['length_choices', 'price_unit', 'grid_top', 'grid_bottom', 'gable_mode']) if (cur[k] === undefined && so[k] !== undefined && cur.kind === so.kind) cur[k] = so[k];
+  }
+  for (const [k, v] of Object.entries(seed.settings)) if (d.settings[k] === undefined) d.settings[k] = structuredClone(v);
+  d.catalogVersion = CATALOG_VERSION;
+  db = d; save(); return d;
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* full or blocked: keep in memory */ } }
 function fresh() {
@@ -30,7 +46,7 @@ function fresh() {
       { id: 2, email: 'shop@example.com', name: 'Sample Production Crew', role: 'production', created_at: now() },
       { id: 3, email: 'sales@example.com', name: 'Sample Sales (Highway 45 lot)', role: 'sales', dealer_id: 'lot2', created_at: now() },
     ],
-    seq: 1000,
+    seq: 1000, catalogVersion: CATALOG_VERSION,
   };
   db = d; sampleQuotes(); return d;
 }
