@@ -17,19 +17,23 @@ export function hashPassword(pw) {
 export function verifyPassword(pw, stored) {
   const [, salt, hash] = String(stored).split('$');
   if (!salt || !hash) return false;
-  const h = crypto.scryptSync(pw, salt, 64);
-  return crypto.timingSafeEqual(h, Buffer.from(hash, 'hex'));
+  const h = crypto.scryptSync(pw, salt, 64), want = Buffer.from(hash, 'hex');
+  return want.length === h.length && crypto.timingSafeEqual(h, want);
 }
 
 const COOKIE = 'sb_session';
 const TTL = 1000 * 60 * 60 * 24 * 14; // 14 days
 
-export function issueSession(res, userId) {
+// The signature also covers the user's current password hash, so changing a password (or deleting the
+// user) instantly signs out every existing session for that login.
+const sign = (uid, exp, pwHash) => crypto.createHmac('sha256', secret()).update(`${uid}.${exp}.${pwHash || ''}`).digest('base64url');
+const isSecure = req => process.env.COOKIE_SECURE === 'true' || (process.env.COOKIE_SECURE !== 'false' && !!req?.secure);
+export function issueSession(res, userId, req) {
   const exp = Date.now() + TTL;
+  const u = get('SELECT password_hash FROM users WHERE id = ?', Number(userId));
   const payload = `${userId}.${exp}`;
-  const sig = crypto.createHmac('sha256', secret()).update(payload).digest('base64url');
-  const secure = process.env.COOKIE_SECURE === 'true' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `${COOKIE}=${payload}.${sig}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${TTL / 1000}${secure}`);
+  const secure = isSecure(req) ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${COOKIE}=${payload}.${sign(userId, exp, u?.password_hash)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${TTL / 1000}${secure}`);
 }
 export function clearSession(res) {
   res.setHeader('Set-Cookie', `${COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
@@ -39,9 +43,13 @@ function readSession(req) {
   if (!raw) return null;
   const [uid, exp, sig] = raw.slice(COOKIE.length + 1).split('.');
   if (!uid || !exp || !sig || Number(exp) < Date.now()) return null;
-  const expect = crypto.createHmac('sha256', secret()).update(`${uid}.${exp}`).digest('base64url');
+  if (!/^\d+$/.test(uid) || !/^\d+$/.test(exp)) return null;
+  const u = get("SELECT id, email, name, COALESCE(role, 'admin') AS role, dealer_id, password_hash FROM users WHERE id = ?", Number(uid));
+  if (!u) return null;
+  const expect = sign(uid, exp, u.password_hash);
   if (sig.length !== expect.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
-  return get("SELECT id, email, name, COALESCE(role, 'admin') AS role, dealer_id FROM users WHERE id = ?", Number(uid)) || null;
+  delete u.password_hash;
+  return u;
 }
 
 // ---- API keys ----------------------------------------------------------------
@@ -55,7 +63,7 @@ function readApiKey(req) {
   let key = req.headers['x-api-key'];
   const auth = req.headers.authorization || '';
   if (!key && auth.startsWith('Bearer ')) key = auth.slice(7).trim();
-  if (!key) return null;
+  if (!key || String(key).length > 200) return null;
   const hash = crypto.createHash('sha256').update(String(key)).digest('hex');
   const row = get('SELECT * FROM api_keys WHERE key_hash = ?', hash);
   if (row) run("UPDATE api_keys SET last_used = datetime('now') WHERE id = ?", row.id);

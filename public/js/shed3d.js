@@ -267,10 +267,13 @@ function rbox(w, h, d, r, mat, x, y, z, parent) {
 function casing(g, w, h, M, zOut, withSill) {
   if (M.noCasing) return; // exported .glb files: the builder adds its own trim around the opening
   const cw = M.cw ?? 0.33, ct = 0.06;
-  box(cw, h + cw, ct, M.trim, -w / 2 - cw / 2, (h + cw) / 2, zOut + ct / 2, g);
-  box(cw, h + cw, ct, M.trim, w / 2 + cw / 2, (h + cw) / 2, zOut + ct / 2, g);
-  box(w + cw * 2 + 0.1, cw, ct + 0.02, M.trim, 0, h + cw / 2, zOut + ct / 2, g);
-  if (withSill) box(w + cw * 2 + 0.2, 0.12, 0.28, M.trim, 0, -0.06, zOut + 0.1, g);
+  // windows/vents: flat picture-frame casing all the way around (no projecting sill); doors: sides + head only
+  const lo = withSill ? -cw : 0, sh = h + cw - lo;
+  box(cw, sh, ct, M.trim, -w / 2 - cw / 2, lo + sh / 2, zOut + ct / 2, g);
+  box(cw, sh, ct, M.trim, w / 2 + cw / 2, lo + sh / 2, zOut + ct / 2, g);
+  // windows: head and bottom are flush with the sides (a clean flat frame); doors keep the small head-trim ears
+  box(w + cw * 2 + (withSill ? 0 : 0.1), cw, ct + (withSill ? 0 : 0.02), M.trim, 0, h + cw / 2, zOut + ct / 2, g);
+  if (withSill) box(w + cw * 2, cw, ct, M.trim, 0, -cw / 2, zOut + ct / 2, g);
 }
 // Carriage-house door leaf (matches the 72" double / 36" single carriage doors): 5-lite window across the top,
 // framed upper & lower panels of vertical boards, black strap hinges on the hinge side.
@@ -377,8 +380,9 @@ function windowUnit(g, w, h, M, opts = {}) {
     grid(bc, br, fw, half); grid(tc, tr, fw + half + rail, half);
   } else grid(opts.cols ?? 2, opts.rows ?? 2, fw, ih);
   // interior casing (trim color)
-  box(w + 0.3, 0.15, 0.04, M.trim, 0, h + 0.07, -T / 2 - 0.02, g);
-  box(w + 0.3, 0.15, 0.2, M.trim, 0, -0.07, -T / 2 - 0.05, g);
+  box(w + 0.3, 0.15, 0.04, M.trim, 0, h + 0.075, -T / 2 - 0.02, g);
+  box(w + 0.3, 0.15, 0.04, M.trim, 0, -0.075, -T / 2 - 0.02, g);
+  for (const sx of [-1, 1]) box(0.15, h, 0.04, M.trim, sx * (w / 2 + 0.075), h / 2, -T / 2 - 0.02, g);
 }
 
 export const BUILTIN_KINDS = {

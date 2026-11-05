@@ -89,7 +89,7 @@ export function seed() {
   opt('winsh', { name: 'Window w/ Shutters', category: 'windows', kind: 'window_shutters', placement: 'opening', swap_group: 'window', width: 2, height: 3, elevation: 3.5, price: 235, sort: s++ });
   opt('transom', { name: 'Transom Window', category: 'windows', kind: 'window_transom', placement: 'opening', swap_group: 'window', gable_mode: 'allow', width: 3, height: 1.25, elevation: 5.5, price: 175, sort: s++ });
   opt('vent', { name: 'Gable Vent', category: 'exterior', kind: 'vent', placement: 'opening', swap_group: 'vent', width: 1.5, height: 1, elevation: -1, price: 45, sort: 0, description: 'Auto-placed high in the gable.' });
-  opt('flower', { name: 'Flower Box', category: 'exterior', kind: 'flowerbox', placement: 'wall_exterior', width: 2.5, height: 0.7, depth: 0.75, elevation: 2.7, price: 95, sort: 1 });
+  opt('flower', { name: 'Flower Box', category: 'exterior', kind: 'flowerbox', placement: 'wall_exterior', width: 2.5, height: 0.7, depth: 0.75, elevation: 2.4, price: 95, sort: 1 });
   opt('ramp', { name: 'Wood Ramp', category: 'exterior', kind: 'ramp', placement: 'ground', width: 4, height: 0.7, depth: 3.5, price: 295, sort: 2 });
   opt('cupola', { name: 'Cupola', category: 'exterior', kind: 'cupola', placement: 'roof', width: 2, height: 2.5, depth: 2, price: 349, sort: 3 });
   opt('extlight', { name: 'Exterior Barn Light', category: 'electrical', kind: 'ext_light', placement: 'wall_exterior', width: 0.8, height: 1, depth: 1, elevation: 6.9, price: 125, sort: 4 });

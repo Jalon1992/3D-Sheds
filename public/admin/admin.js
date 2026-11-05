@@ -179,7 +179,7 @@ async function dashboard() {
   const won = s.byStatus.find(x => x.status === 'won')?.n || 0;
   const checks = [
     [settings.company_name && settings.company_name !== 'Your Shed Co.', 'Add your company name, logo and brand color', '#/settings'],
-    [me.email !== 'admin@example.com', 'Change the default admin login', '#/account'],
+    [me.email !== 'admin@example.com' && !me.default_password, 'Change the default admin login and password', '#/account'],
     [settings.ghl_enabled || settings.ghl_inbound_webhook_url, 'Connect GoHighLevel', '#/integrations'],
     [hooks.length > 0 || keys.length > 0, 'Add a webhook or API key for other software', '#/integrations/webhooks'],
     [true, 'Review styles, sizes and prices', '#/styles'],
@@ -235,7 +235,9 @@ async function quotes(id) {
     const res = await api('GET', '/api/v1/quotes?limit=500');
     const rows = [['Quote', 'Date', 'Status', 'First', 'Last', 'Email', 'Phone', 'Address', 'City', 'State', 'ZIP', 'Style', 'Size', 'Options', 'Dealer lot', 'Price tier', 'Total', '3D link']];
     for (const x of res.data) rows.push([x.number, x.created_at, x.status, x.customer.first_name, x.customer.last_name, x.customer.email, x.customer.phone, x.customer.address, x.customer.city, x.customer.state, x.customer.zip, x.shed.style, x.shed.size, x.options.map(o => o.name).join('; '), x.dealer?.name || '', x.pricing.tier || '', x.pricing.total, x.links.view_3d]);
-    const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    // a leading = + - @ would make Excel/Sheets run a formula typed into a quote form (CSV injection)
+    const cell = v => { let t = String(v ?? ''); if (typeof v !== 'number' && /^[=+\-@\t\r]/.test(t) && !/^\+?[\d\s().-]+$/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+    const csv = rows.map(r => r.map(cell).join(',')).join('\n');
     saveFile(new Blob([csv], { type: 'text/csv' }), 'shed-quotes.csv');
   });
   await render();

@@ -1,5 +1,7 @@
 // Outbound integrations: generic signed webhooks + native GoHighLevel (LeadConnector API v2).
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { all, get, run, getSettings } from './db.js';
 import { formatQuote } from '../public/js/shared/quote-format.js';
 
@@ -13,15 +15,56 @@ function log(webhook_id, target, event, status, ok, attempt, response) {
   run('DELETE FROM webhook_log WHERE id NOT IN (SELECT id FROM webhook_log ORDER BY id DESC LIMIT 1000)');
 }
 
+// ---- Outbound URL safety (SSRF): webhooks may only go to the public internet, never to this server's own
+// network (localhost, 10.x, 192.168.x, cloud metadata at 169.254.169.254, ...). Set ALLOW_PRIVATE_WEBHOOKS=true
+// to deliver to a private address on purpose (e.g. an on-prem CRM on the same network).
+const allowPrivate = () => process.env.ALLOW_PRIVATE_WEBHOOKS === 'true';
+export function isPrivateIp(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
+  }
+  if (net.isIPv6(ip)) {
+    const x = ip.toLowerCase().replace(/^\[|\]$/g, '');
+    if (x === '::' || x === '::1') return true;
+    const m = x.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/); if (m) return isPrivateIp(m[1]);
+    return /^(fc|fd|fe8|fe9|fea|feb|ff)/.test(x) || x.startsWith('64:ff9b:') || x.startsWith('::ffff:');
+  }
+  return true;
+}
+/** Returns an error message, or '' when the URL is fine. syncOnly skips the DNS lookup (used when saving). */
+export function checkOutboundUrl(raw, { syncOnly = false } = {}) {
+  let u; try { u = new URL(String(raw || '')); } catch { return 'url must be a full http(s):// address'; }
+  if (!['http:', 'https:'].includes(u.protocol)) return 'url must start with http(s)://';
+  if (u.username || u.password) return 'url must not contain a username or password (use the headers field instead)';
+  if (allowPrivate()) return '';
+  const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal') || host.endsWith('.local') || !host.includes('.') && !net.isIP(host)) return 'url must be a public internet address';
+  if (net.isIP(host) && isPrivateIp(host)) return 'url must be a public internet address';
+  return syncOnly ? '' : null;
+}
+async function assertPublicUrl(raw) {
+  const why = checkOutboundUrl(raw, { syncOnly: true });
+  if (why) throw new Error('Blocked: ' + why);
+  if (allowPrivate()) return;
+  const host = new URL(raw).hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host)) return;
+  const addrs = await dns.lookup(host, { all: true });
+  if (!addrs.length || addrs.some(a => isPrivateIp(a.address))) throw new Error('Blocked: ' + host + ' points to a private network address');
+}
+
 async function postJSON(url, body, headers = {}, timeoutMs = 10000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body, signal: ctrl.signal });
+    await assertPublicUrl(url);
+    // redirects are not followed (a public URL could otherwise bounce the request into the private network)
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body, signal: ctrl.signal, redirect: 'manual' });
     const text = await r.text();
-    return { status: r.status, ok: r.ok, text };
+    return { status: r.status, ok: r.ok, text: r.status >= 300 && r.status < 400 ? `Redirect to ${r.headers.get('location') || '?'} not followed — use the final URL` : text };
   } catch (e) {
-    return { status: 0, ok: false, text: e.message };
+    return { status: 0, ok: false, text: e.message, blocked: String(e.message).startsWith('Blocked') };
   } finally { clearTimeout(t); }
 }
 
@@ -30,14 +73,15 @@ export async function deliver(hook, event, data) {
   const payload = JSON.stringify({ event, delivery_id: crypto.randomUUID(), sent_at: new Date().toISOString(), data });
   const headers = { 'User-Agent': 'ShedBuilder-Webhooks/1.0', 'X-ShedBuilder-Event': event };
   if (hook.secret) headers['X-ShedBuilder-Signature'] = 'sha256=' + crypto.createHmac('sha256', hook.secret).update(payload).digest('hex');
-  Object.assign(headers, hook.headers || {});
+  for (const [k, v] of Object.entries(hook.headers && typeof hook.headers === 'object' ? hook.headers : {}))
+    if (/^[!#$%&'*+.^_`|~0-9a-z-]{1,100}$/i.test(k) && !/[\r\n]/.test(String(v))) headers[k] = String(v);
   const delays = [0, 1000, 5000, 25000];
   let last;
   for (let i = 0; i < delays.length; i++) {
     if (delays[i]) await new Promise(r => setTimeout(r, delays[i]));
     last = await postJSON(hook.url, payload, headers);
     log(hook.id || null, hook.url, event, last.status, last.ok, i + 1, last.text);
-    if (last.ok || (last.status >= 400 && last.status < 500 && last.status !== 429)) break;
+    if (last.ok || last.blocked || (last.status >= 300 && last.status < 500 && last.status !== 429)) break;
   }
   return last;
 }

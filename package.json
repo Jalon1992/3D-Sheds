@@ -13,13 +13,13 @@
     "build:demo": "node demo/build.mjs"
   },
   "dependencies": {
-    "express": "^4.21.2",
-    "jspdf": "^2.5.2",
-    "multer": "^1.4.5-lts.1",
-    "svg2pdf.js": "^2.2.4",
+    "express": "^4.22.3",
+    "jspdf": "^4.2.1",
+    "multer": "^2.5.0",
+    "svg2pdf.js": "^2.9.0",
     "three": "^0.169.0"
   },
   "devDependencies": {
-    "esbuild": "0.24.0"
+    "esbuild": "^0.25.12"
   }
 }

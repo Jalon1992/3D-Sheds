@@ -116,6 +116,15 @@ for (const sql of [
   'ALTER TABLE options ADD COLUMN length_choices TEXT',
 ]) { try { db.exec(sql); } catch { /* column already exists */ } }
 
+// One-time data fixes for existing databases
+try {
+  if (!db.prepare("SELECT 1 FROM settings WHERE key = 'migr_flat_window_trim'").get()) {
+    // windows now have a flat bottom casing (no sill) - drop the default flower box so it sits under the trim
+    db.prepare("UPDATE options SET elevation = 2.4 WHERE kind = 'flowerbox' AND elevation = 2.7").run();
+    db.prepare("INSERT INTO settings (key, value) VALUES ('migr_flat_window_trim', 'true')").run();
+  }
+} catch { /* settings table not ready */ }
+
 // ---- JSON column helpers -----------------------------------------------------
 export const JSON_COLS = new Set(['standard_options', 'default_colors', 'roof_choices', 'available_options', 'package_items', 'roofing', 'price_tiers', 'dealers', 'zip_tiers', 'events', 'headers', 'config', 'pricing', 'utm']);
 

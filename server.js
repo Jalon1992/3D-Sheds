@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { db, all, get, run, getSettings, setSettings, getCatalog, JSON_COLS } from './src/db.js';
 import { seed } from './src/seed.js';
 import { requireAuth, requireSession, issueSession, clearSession, verifyPassword, hashPassword, createApiKey, readSession, readApiKey, ROLES } from './src/auth.js';
-import { emit, deliver, formatQuote, recentLog, pushToGHL, EVENTS } from './src/integrations.js';
+import { emit, deliver, formatQuote, recentLog, pushToGHL, EVENTS, checkOutboundUrl } from './src/integrations.js';
 import { openapi } from './src/openapi.js';
 import { priceConfig, sanitizeConfig, stripPrices, hideQuotePrices } from './public/js/shared/pricing.js';
 import { floorPlanSVG } from './public/js/shared/floorplan.js';
@@ -22,8 +22,26 @@ mkdirSync(UPLOAD_DIR, { recursive: true });
 seed();
 
 const app = express();
-app.set('trust proxy', true);
+app.disable('x-powered-by');
+// Only trust the hosting platform's own proxy hop (Railway/Render/Fly) for the client IP + https detection.
+// 'true' would let anyone spoof X-Forwarded-For and dodge the rate limits.
+const TRUST = process.env.TRUST_PROXY ?? '1';
+app.set('trust proxy', /^\d+$/.test(TRUST) ? Number(TRUST) : TRUST === 'true' ? true : TRUST === 'false' ? false : TRUST);
 app.use(express.json({ limit: '2mb' }));
+
+// ---- Security headers. The customer configurator stays embeddable (GHL / any website iframes it);
+// the admin is never framed (clickjacking), and uploaded files can't run scripts on this origin.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  if (req.path.startsWith('/admin') || req.path.startsWith('/api/admin') || req.path.startsWith('/api/auth')) {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  }
+  if (req.path.startsWith('/uploads/')) res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+  next();
+});
 
 // ---- CORS for the API (lets you embed the configurator or call the API from any site / CRM)
 app.use('/api/v1', (req, res, next) => {
@@ -35,15 +53,23 @@ app.use('/api/v1', (req, res, next) => {
   next();
 });
 
-const baseUrl = req => (getSettings().public_url || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+// Links sent in webhooks/GHL/emails. Never built from an unchecked Host header (an attacker could otherwise
+// make customer links point at their own site).
+const baseUrl = req => {
+  const fixed = getSettings().public_url || process.env.PUBLIC_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? 'https://' + process.env.RAILWAY_PUBLIC_DOMAIN : '');
+  if (fixed) return String(fixed).replace(/\/$/, '');
+  const host = String(req.get('host') || '');
+  return `${req.protocol}://${/^[a-z0-9.-]+(:\d+)?$/i.test(host) ? host : 'localhost:' + PORT}`;
+};
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
 
 // ---- Simple in-memory rate limit for public quote submissions
 const hits = new Map();
-function rateLimit(max, windowMs) {
+setInterval(() => { const now = Date.now(); for (const [k, a] of hits) if (!a.length || now - a[a.length - 1] > 600000) hits.delete(k); }, 300000).unref();
+function rateLimit(max, windowMs, key = req => req.ip + req.path) {
   return (req, res, next) => {
-    const k = req.ip + req.path, now = Date.now();
+    const k = key(req), now = Date.now();
     const arr = (hits.get(k) || []).filter(t => now - t < windowMs);
     if (arr.length >= max) return bad(res, 'Too many requests, please try again in a minute.', 429);
     arr.push(now); hits.set(k, arr); next();
@@ -70,7 +96,7 @@ app.get('/api/v1/catalog', (req, res) => {
 
 // Health check for Railway/Render/Docker: answers once the database is reachable
 app.get('/healthz', (req, res) => { try { get('SELECT 1 AS ok'); res.json({ ok: true }); } catch (e) { res.status(503).json({ ok: false }); } });
-app.post('/api/v1/price', (req, res) => {
+app.post('/api/v1/price', rateLimit(240, 60000), (req, res) => {
   if (!canSeePrices(req)) return bad(res, 'Prices are not shown publicly. Send an API key to price a configuration.', 403);
   try {
     const cat = getCatalog();
@@ -93,14 +119,18 @@ app.post('/api/v1/quotes', rateLimit(8, 60000), wrap(async (req, res) => {
   try { cfg = sanitizeConfig(cat, config); pricing = priceConfig(cat, cfg); } catch (e) { return bad(res, e.message); }
   const { style, size } = pricing; delete pricing.style;
   pricing.size = { width: size.width, depth: size.depth };
-  const s = v => (v == null ? null : String(v).slice(0, 500));
+  const s = (v, n = 500) => (v == null || typeof v === 'object' ? null : String(v).slice(0, n));
   const token = crypto.randomBytes(16).toString('hex');
+  // a lot-restricted staff login always files the quote under its own lot (so it shows in their quote list),
+  // even when pricing isn't per-dealer
+  const lotId = viewer?.dealer_id ? String(viewer.dealer_id) : pricing.dealer ? String(pricing.dealer.id) : null;
+  const lotName = pricing.dealer?.name || (lotId ? (getSettings().dealers || []).find(d => String(d.id) === lotId)?.name || null : null);
   const r = run(`INSERT INTO quotes (token, first_name, last_name, email, phone, address, city, state, zip, notes, sms_consent, source, utm, config, pricing, total, style_name, size_label, dealer_id, dealer_name, price_tier, pricing_zip)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     token, s(customer.first_name), s(customer.last_name), s(customer.email)?.toLowerCase(), s(customer.phone), s(customer.address), s(customer.city),
-    s(customer.state), s(customer.zip), s(customer.notes), customer.sms_consent ? 1 : 0, s(source || req.get('referer') || 'configurator'),
-    JSON.stringify(utm || {}), JSON.stringify(cfg), JSON.stringify(pricing), pricing.total, style.name, `${size.width}' x ${size.depth}'`,
-    pricing.dealer ? String(pricing.dealer.id) : null, pricing.dealer?.name || null, pricing.tier_name || null, pricing.zip || null);
+    s(customer.state), s(customer.zip), s(customer.notes, 4000), customer.sms_consent ? 1 : 0, s(source || req.get('referer') || 'configurator'),
+    JSON.stringify(cleanUtm(utm)), JSON.stringify(cfg), JSON.stringify(pricing), pricing.total, style.name, `${size.width}' x ${size.depth}'`,
+    lotId, lotName, pricing.tier_name || null, pricing.zip || null);
   const id = Number(r.lastInsertRowid);
   run('UPDATE quotes SET number = ? WHERE id = ?', 'Q-' + (10000 + id), id);
   const q = get('SELECT * FROM quotes WHERE id = ?', id);
@@ -109,6 +139,13 @@ app.post('/api/v1/quotes', rateLimit(8, 60000), wrap(async (req, res) => {
   delete out.links.admin; delete out.integrations;
   res.status(201).json(viewer || pricesPublic() ? out : hideQuotePrices(out));
 }));
+
+function cleanUtm(u) {
+  const out = {};
+  if (u && typeof u === 'object' && !Array.isArray(u))
+    for (const [k, v] of Object.entries(u).slice(0, 20)) if (/^[\w.-]{1,40}$/.test(k) && v != null && typeof v !== 'object') out[k] = String(v).slice(0, 300);
+  return out;
+}
 
 // Customer-facing quote by secret token (reload in configurator / floor plan link in emails)
 app.get('/api/v1/shared/:token', (req, res) => {
@@ -126,7 +163,7 @@ function sendPlan(res, q) {
     const cat = getCatalog({ includeInactive: true });
     res.type('image/svg+xml').setHeader('Content-Disposition', `inline; filename="${q.number}-floor-plan.svg"`);
     res.send(floorPlanSVG(cat, q.config, { customer: q, quote_number: q.number, date: new Date(q.created_at + 'Z').toLocaleDateString('en-US') }));
-  } catch (e) { res.status(500).send('Could not render floor plan: ' + e.message); }
+  } catch (e) { console.error(e); res.status(500).send('Could not render floor plan'); }
 }
 
 app.get('/api/openapi.json', (req, res) => res.json(openapi(baseUrl(req))));
@@ -161,8 +198,10 @@ v1.patch('/quotes/:id', (req, res) => {
   const q = get('SELECT * FROM quotes WHERE id = ?', Number(req.params.id));
   if (!q || !ownQuote(req, q)) return bad(res, 'Not found', 404);
   const { status, internal_notes } = req.body || {};
+  if (status != null && !/^[a-z0-9 _-]{1,40}$/i.test(String(status))) return bad(res, 'status must be a short word like new, contacted, quoted, won or lost');
+  if (internal_notes != null && String(internal_notes).length > 20000) return bad(res, 'internal_notes is too long');
   run("UPDATE quotes SET status = COALESCE(?, status), internal_notes = COALESCE(?, internal_notes), updated_at = datetime('now') WHERE id = ?",
-    status ?? null, internal_notes ?? null, q.id);
+    status == null ? null : String(status).toLowerCase(), internal_notes == null ? null : String(internal_notes), q.id);
   const nq = get('SELECT * FROM quotes WHERE id = ?', q.id);
   emit(status && status !== q.status ? 'quote.status_changed' : 'quote.updated', nq, baseUrl(req));
   res.json(formatQuote(nq, baseUrl(req)));
@@ -203,9 +242,9 @@ function clean(table, body) {
 }
 for (const table of Object.keys(TABLES)) {
   v1.get(`/${table}`, (req, res) => {
-    const filt = table === 'sizes' && req.query.style_id ? ' WHERE style_id = ' + Number(req.query.style_id) : '';
+    const filt = table === 'sizes' && req.query.style_id ? ' WHERE style_id = ?' : '';
     const order = table === 'webhooks' ? 'id' : (table === 'sizes' ? 'style_id, sort, width, depth' : 'sort, id');
-    res.json(all(`SELECT * FROM ${table}${filt} ORDER BY ${order}`));
+    res.json(all(`SELECT * FROM ${table}${filt} ORDER BY ${order}`, ...(filt ? [Number(req.query.style_id) || 0] : [])));
   });
   v1.get(`/${table}/:id`, (req, res) => {
     const r = get(`SELECT * FROM ${table} WHERE id = ?`, Number(req.params.id));
@@ -213,7 +252,7 @@ for (const table of Object.keys(TABLES)) {
   });
   v1.post(`/${table}`, (req, res) => {
     const d = clean(table, req.body);
-    if (table === 'webhooks' && !/^https?:\/\//.test(d.url || '')) return bad(res, 'url must start with http(s)://');
+    if (table === 'webhooks') { const why = checkOutboundUrl(d.url, { syncOnly: true }); if (why) return bad(res, why); }
     const keys = Object.keys(d);
     if (!keys.length) return bad(res, 'No valid fields');
     try {
@@ -224,6 +263,7 @@ for (const table of Object.keys(TABLES)) {
   const upd = (req, res) => {
     const d = clean(table, req.body), keys = Object.keys(d);
     if (!keys.length) return bad(res, 'No valid fields');
+    if (table === 'webhooks' && 'url' in d) { const why = checkOutboundUrl(d.url, { syncOnly: true }); if (why) return bad(res, why); }
     try {
       run(`UPDATE ${table} SET ${keys.map(k => k + ' = ?').join(', ')} WHERE id = ?`, ...keys.map(k => d[k]), Number(req.params.id));
       res.json(get(`SELECT * FROM ${table} WHERE id = ?`, Number(req.params.id)));
@@ -246,15 +286,27 @@ app.use('/api/v1', v1);
 // =============================================================================
 //  ADMIN-ONLY (session)
 // =============================================================================
+// Brute-force protection: 10 tries/min per IP, and 20 failed tries per 15 min per account (any IP)
+const failedLogins = new Map();
+const DUMMY_HASH = hashPassword(crypto.randomBytes(8).toString('hex'));
 app.post('/api/auth/login', rateLimit(10, 60000), (req, res) => {
   const { email, password } = req.body || {};
-  const u = get('SELECT * FROM users WHERE email = ?', String(email || '').toLowerCase().trim());
-  if (!u || !verifyPassword(String(password || ''), u.password_hash)) return bad(res, 'Wrong email or password', 401);
-  issueSession(res, u.id);
-  res.json({ id: u.id, email: u.email, name: u.name, role: u.role || 'admin', dealer_id: u.dealer_id || null });
+  const em = String(email || '').toLowerCase().trim().slice(0, 200), now = Date.now();
+  const fails = (failedLogins.get(em) || []).filter(t => now - t < 15 * 60000);
+  if (fails.length >= 20) return bad(res, 'Too many failed logins for this account. Try again in 15 minutes.', 429);
+  const u = get('SELECT * FROM users WHERE email = ?', em);
+  const ok = verifyPassword(String(password || '').slice(0, 1000), u ? u.password_hash : DUMMY_HASH) && !!u; // same work whether or not the email exists
+  if (!ok) { fails.push(now); failedLogins.set(em, fails); if (failedLogins.size > 5000) failedLogins.clear(); return bad(res, 'Wrong email or password', 401); }
+  failedLogins.delete(em);
+  issueSession(res, u.id, req);
+  res.json({ id: u.id, email: u.email, name: u.name, role: u.role || 'admin', dealer_id: u.dealer_id || null, default_password: String(password) === 'changeme123' });
 });
 app.post('/api/auth/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
-app.get('/api/auth/me', (req, res) => { const u = readSession(req); u ? res.json(u) : bad(res, 'Not logged in', 401); });
+app.get('/api/auth/me', (req, res) => {
+  const u = readSession(req); if (!u) return bad(res, 'Not logged in', 401);
+  const row = get('SELECT password_hash FROM users WHERE id = ?', u.id);
+  res.json({ ...u, default_password: verifyPassword('changeme123', row?.password_hash) });
+});
 
 const admin = express.Router();
 admin.use(requireSession);
@@ -269,16 +321,22 @@ admin.post('/account', (req, res) => {
   const u = get('SELECT * FROM users WHERE id = ?', req.user.id);
   if (!verifyPassword(String(current_password || ''), u.password_hash)) return bad(res, 'Current password is wrong');
   if (new_password && String(new_password).length < 8) return bad(res, 'New password must be at least 8 characters');
-  run('UPDATE users SET email = COALESCE(?, email), name = COALESCE(?, name), password_hash = ? WHERE id = ?',
-    email ? String(email).toLowerCase() : null, name || null, new_password ? hashPassword(String(new_password)) : u.password_hash, u.id);
+  if (email && !/^\S+@\S+\.\S+$/.test(String(email))) return bad(res, 'Email looks invalid');
+  try {
+    run('UPDATE users SET email = COALESCE(?, email), name = COALESCE(?, name), password_hash = ? WHERE id = ?',
+      email ? String(email).toLowerCase().trim() : null, name ? String(name).slice(0, 120) : null, new_password ? hashPassword(String(new_password)) : u.password_hash, u.id);
+  } catch { return bad(res, 'That email is already used by another login'); }
+  // a password change signs out every other device; keep this one signed in
+  if (new_password) issueSession(res, u.id, req);
   res.json({ ok: true });
 });
 admin.get('/users', (req, res) => res.json(all("SELECT id, email, name, COALESCE(role, 'admin') AS role, dealer_id, created_at FROM users")));
 admin.post('/users', (req, res) => {
   const { email, name, password, role = 'admin', dealer_id = null } = req.body || {};
-  if (!email || !password || password.length < 8) return bad(res, 'Email and an 8+ character password are required');
+  if (typeof email !== 'string' || typeof password !== 'string' || password.length < 8) return bad(res, 'Email and an 8+ character password are required');
+  if (!/^\S+@\S+\.\S+$/.test(email)) return bad(res, 'Email looks invalid');
   if (!ROLES.includes(role)) return bad(res, 'Unknown role');
-  try { run('INSERT INTO users (email, name, password_hash, role, dealer_id) VALUES (?,?,?,?,?)', email.toLowerCase(), name || '', hashPassword(password), role, role === 'admin' ? null : (dealer_id || null)); res.json({ ok: true }); }
+  try { run('INSERT INTO users (email, name, password_hash, role, dealer_id) VALUES (?,?,?,?,?)', email.toLowerCase().trim(), String(name || '').slice(0, 120), hashPassword(password), role, role === 'admin' ? null : (dealer_id == null || dealer_id === '' ? null : String(dealer_id))); res.json({ ok: true }); }
   catch { bad(res, 'That email already exists'); }
 });
 admin.patch('/users/:id', (req, res) => {
@@ -289,7 +347,7 @@ admin.patch('/users/:id', (req, res) => {
   if (password && String(password).length < 8) return bad(res, 'Password must be at least 8 characters');
   const r = role || u.role || 'admin';
   run('UPDATE users SET role = ?, dealer_id = ?, name = COALESCE(?, name), password_hash = ? WHERE id = ?',
-    r, r === 'admin' ? null : (dealer_id === undefined ? u.dealer_id : (dealer_id || null)), name ?? null, password ? hashPassword(String(password)) : u.password_hash, u.id);
+    r, r === 'admin' ? null : (dealer_id === undefined ? u.dealer_id : (dealer_id == null || dealer_id === '' ? null : String(dealer_id))), name == null ? null : String(name).slice(0, 120), password ? hashPassword(String(password)) : u.password_hash, u.id);
   res.json({ ok: true });
 });
 admin.delete('/users/:id', (req, res) => {
@@ -307,6 +365,9 @@ admin.put('/settings', (req, res) => {
   delete b._session_secret; delete b.ghl_token_set;
   if (typeof b.ghl_token === 'string' && b.ghl_token.startsWith('••••')) delete b.ghl_token; // unchanged
   for (const k of ['tax_rate', 'delivery_fee']) if (k in b) b[k] = Number(b[k]) || 0;
+  for (const k of Object.keys(b)) if (k.startsWith('_') || k.startsWith('migr_')) delete b[k]; // internal keys
+  if (b.ghl_inbound_webhook_url) { const why = checkOutboundUrl(b.ghl_inbound_webhook_url, { syncOnly: true }); if (why) return bad(res, 'GHL inbound webhook URL: ' + why); }
+  if (b.public_url && !/^https?:\/\/[^\s"'<>]+$/.test(String(b.public_url))) return bad(res, 'Public URL must start with http:// or https://');
   setSettings(b); res.json({ ok: true });
 });
 admin.post('/ghl/test', wrap(async (req, res) => {
@@ -365,7 +426,7 @@ const upload = multer({
     destination: UPLOAD_DIR,
     filename: (req, file, cb) => cb(null, Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex') + extname(file.originalname).toLowerCase()),
   }),
-  limits: { fileSize: 40 * 1024 * 1024 },
+  limits: { fileSize: 40 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => cb(null, /\.(glb|gltf|png|jpe?g|webp|svg)$/i.test(file.originalname)),
 });
 admin.post('/upload', upload.single('file'), (req, res) => {
@@ -383,7 +444,7 @@ app.use('/api/admin', admin);
 // =============================================================================
 //  STATIC
 // =============================================================================
-app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', dotfiles: 'deny', index: false }));
 app.get('/docs', (req, res) => res.sendFile(join(__dirname, 'public', 'docs.html')));
 app.use(express.static(join(__dirname, 'public'), { extensions: ['html'] }));
 
@@ -392,8 +453,9 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Request body is not valid JSON' });
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request body is too large' });
   if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File is too large' });
+  if (err instanceof multer.MulterError) return res.status(400).json({ error: err.message });
   console.error(err);
-  res.status(500).json({ error: err.message || 'Server error' });
+  res.status(500).json({ error: 'Server error' }); // details stay in the server log
 });
 
 app.listen(PORT, () => {

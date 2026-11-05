@@ -38,7 +38,10 @@ The first run seeds 4 sample styles (Classic Gable, Lofted Barn, Modern Lean-To,
 | `DB_PATH` | `./data/shedbuilder.db` | SQLite database file |
 | `UPLOAD_DIR` | `./uploads` | Uploaded 3D models and images |
 | `SESSION_SECRET` | auto-generated | Cookie signing secret |
-| `COOKIE_SECURE` | `false` | Set `true` when served over HTTPS |
+| `COOKIE_SECURE` | auto | Session cookie gets `Secure` automatically over HTTPS; force with `true`/`false` |
+| `PUBLIC_URL` | — | Base URL for links in webhooks/GHL (same as **Settings → Public URL**; on Railway `RAILWAY_PUBLIC_DOMAIN` is used automatically) |
+| `TRUST_PROXY` | `1` | How many proxy hops to trust for the client IP (rate limits). `1` is right for Railway/Render/Fly or one Nginx |
+| `ALLOW_PRIVATE_WEBHOOKS` | `false` | Allow webhooks to private/LAN addresses (blocked by default so the server can't be used to probe its own network) |
 
 **Back up `data/` and `uploads/`** — that's everything (catalog, quotes, settings, models).
 
@@ -58,7 +61,7 @@ Any host that runs Node or Docker works. It needs a **persistent disk** for `dat
 ```bash
 docker build -t shed-builder .
 docker run -d -p 3000:3000 -v shed_data:/app/data -v shed_uploads:/app/uploads \
-  -e ADMIN_EMAIL=you@co.com -e ADMIN_PASSWORD='…' -e COOKIE_SECURE=true shed-builder
+  -e ADMIN_EMAIL=you@co.com -e ADMIN_PASSWORD='…' -e PUBLIC_URL=https://builder.yourdomain.com shed-builder
 ```
 
 **Render / Railway / Fly.io:** create a Node (or Docker) web service from this folder, add a persistent volume mounted at `/app/data` (and one for `/app/uploads`, or set `UPLOAD_DIR` inside the same volume, e.g. `/app/data/uploads`), set the env vars above, start command `npm start`.
@@ -300,6 +303,15 @@ public/admin/                Admin dashboard
 demo/                        Single-file demo build
 render.yaml, Dockerfile      Deployment
 ```
+
+## Security
+
+- **Logins:** scrypt-hashed passwords; HttpOnly + SameSite session cookies (Secure over HTTPS). Changing a password, or deleting a user, signs that login out everywhere. Login is rate-limited per IP (10/min) and per account (20 failures locks it for 15 min). The dashboard warns while the default `changeme123` password is still in use.
+- **Roles:** sales/production logins and lot-restricted users are enforced on the server (a lot user can't see, change or download another lot's quotes). API keys are stored hashed and can't reach users, settings or API-key management.
+- **Webhooks:** only to public internet addresses — localhost, private ranges and cloud metadata IPs are refused (checked again at send time, redirects aren't followed). Set `ALLOW_PRIVATE_WEBHOOKS=true` to deliver inside your own network.
+- **Uploads:** only .glb/.gltf/png/jpg/webp/svg; served with a sandbox policy so a script inside an uploaded SVG can't run.
+- **Other:** all SQL is parameterized; customer text is escaped everywhere it's shown (admin, floor plans, PDFs) and CSV exports are protected against spreadsheet-formula injection; the admin can't be framed (clickjacking) while the customer builder stays embeddable for GHL; request bodies are size-limited; errors don't leak internals.
+- `npm audit`: 0 known vulnerabilities at the time of release.
 
 ## Notes
 - Prices shown are a quote, not a contract — tax and delivery are configurable in Settings; hide prices entirely with *Show prices to customers* off.
